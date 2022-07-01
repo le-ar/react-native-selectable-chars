@@ -66,7 +66,6 @@ export const SelectChars = (props: SelectCharsProps) => {
       style={{
         paddingTop: paddintTop,
         paddingHorizontal: paddingLeft,
-        backgroundColor: 'green',
       }}
     >
       <View
