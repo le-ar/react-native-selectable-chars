@@ -1,26 +1,115 @@
 import * as React from 'react'
-import { Button, NativeModules, StyleSheet, Text, View } from 'react-native'
+import { useState } from 'react'
+import {
+  GestureResponderEvent,
+  NativeModules,
+  Pressable,
+  View,
+} from 'react-native'
+import { ContextMenu } from './ContextMenu'
+import { CustomSelection } from './models'
+import { useSelectCharsController } from './SelectCharsController'
+import { SelectCharsHelpers } from './SelectCharsHelper'
+import { SelectCharsPreview } from './SelectCharsPreview'
+import { SelectionsHints } from './SelectionsHints'
+import { SelectCharsStyle } from './styles'
+import { TextMeasure } from './TextMeasure'
+import { TextViewMemo } from './TextView'
 
-export const addOne = (input: number) => input + 1
+export interface SelectCharsProps {
+  // text: string | SelectCharsText | SelectCharsText[]
+  text: string
+  onStartSelect?: () => void
+  onEndSelect?: () => void
+  selections?: CustomSelection[]
+  onSelect?: (
+    start: number,
+    end: number,
+    topY: number,
+    centerX: number,
+    cancelSelect: () => void
+  ) => void | false | JSX.Element
+}
 
-export const Counter = () => {
-  const [count, setCount] = React.useState(0)
+export const SelectChars = (props: SelectCharsProps) => {
+  const [layoutWidth, setLayoutWidth] = useState(0)
+  const [layoutHeight, setLayoutHeight] = useState(0)
+
+  const paddintTop = 40
+  const paddingLeft = 8
+
+  const controller = useSelectCharsController(
+    props.text.length,
+    paddintTop,
+    paddingLeft,
+    props.onStartSelect,
+    props.onEndSelect,
+    props.onSelect
+  )
+
+  const onLongPress = (e: GestureResponderEvent) => {
+    controller.startSelect(e.nativeEvent.locationX, e.nativeEvent.locationY)
+  }
+
+  const onTouchMove = (e: GestureResponderEvent) => {
+    if (controller.isSelecting == null) {
+      return
+    }
+    controller.continueSelect(e.nativeEvent.locationX, e.nativeEvent.locationY)
+  }
 
   return (
-    <View style={styles.container}>
-      <Text>You pressed {count} times</Text>
-      <Button onPress={() => setCount(addOne(count))} title='Press Me' />
+    <View style={{ paddingTop: paddintTop, paddingHorizontal: paddingLeft }}>
+      <View
+        onLayout={(e) => {
+          setLayoutWidth(e.nativeEvent.layout.width)
+          setLayoutHeight(e.nativeEvent.layout.height)
+        }}
+      >
+        <TextMeasure text={props.text} setLines={controller.setLines} />
+        <Pressable
+          delayLongPress={300}
+          style={SelectCharsStyle.pressable}
+          onLongPress={onLongPress}
+          onTouchMove={onTouchMove}
+          onPressOut={() => {
+            controller.setIsSelecting()
+          }}
+          onPress={() => {
+            if (controller.isSelecting == null) {
+              controller.setStartSelectedId(-1)
+              controller.setEndSelectedId(-1)
+            }
+          }}
+        >
+          <TextViewMemo
+            controller={controller}
+            lines={controller.lines}
+            charsPositions={controller.charsPositions}
+            selectFromId={controller.selectFromId}
+            selectToId={controller.selectToId}
+            selections={props.selections}
+          />
+          <SelectionsHints
+            controller={controller}
+            selections={props.selections}
+          />
+          <SelectCharsPreview
+            controller={controller}
+            selections={props.selections}
+            maxRight={layoutWidth}
+          />
+          <View style={SelectCharsStyle.overlay} />
+        </Pressable>
+      </View>
+      <SelectCharsHelpers controller={controller} />
+      <ContextMenu
+        controller={controller}
+        layoutHeight={layoutHeight}
+        layoutWidth={layoutWidth}
+      />
     </View>
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 200,
-  },
-})
-
-export default NativeModules.RNModuleTemplateModule
+export default NativeModules.RNSelectCharsModule
