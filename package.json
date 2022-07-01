@@ -2,7 +2,7 @@
   "name": "react-native-select-chars",
   "version": "1.0.0",
   "description": "",
-  "homepage": "https://github.com/le-ar/react-native-select-chars",
+  "homepage": "https://github.com/le-ar/react-native-selectable-chars",
   "main": "src/index.tsx",
   "types": "lib/index.d.ts",
   "author": "Andrei <malmuk2013@gmail.com>",
