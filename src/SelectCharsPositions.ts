@@ -139,7 +139,11 @@ export class SelectCharsPositions {
     }
 
     const result: CharPos[] = []
-    for (let i = firstId; this.isYInChar(chars[i], y); i++) {
+    for (
+      let i = firstId;
+      i < chars.length && this.isYInChar(chars[i], y);
+      i++
+    ) {
       result.push(chars[i])
     }
 

@@ -18,6 +18,7 @@ import { TextMeasure } from './TextMeasure'
 import { TextViewMemo } from './TextView'
 
 export interface SelectCharsProps {
+  fontSize?: number
   selectEnabled?: boolean
   text: string
   onStartSelect?: () => void
@@ -61,7 +62,13 @@ export const SelectChars = (props: SelectCharsProps) => {
   }
 
   return (
-    <View style={{ paddingTop: paddintTop, paddingHorizontal: paddingLeft }}>
+    <View
+      style={{
+        paddingTop: paddintTop,
+        paddingHorizontal: paddingLeft,
+        backgroundColor: 'green',
+      }}
+    >
       <View
         style={{ opacity: controller.isReady ? 1 : 0 }}
         onLayout={(e) => {
@@ -69,7 +76,11 @@ export const SelectChars = (props: SelectCharsProps) => {
           setLayoutHeight(e.nativeEvent.layout.height)
         }}
       >
-        <TextMeasure text={props.text} setLines={controller.setLines} />
+        <TextMeasure
+          fontSize={props.fontSize}
+          text={props.text}
+          setLines={controller.setLines}
+        />
         <Pressable
           delayLongPress={300}
           style={SelectCharsStyle.pressable}
@@ -86,6 +97,7 @@ export const SelectChars = (props: SelectCharsProps) => {
           }}
         >
           <TextViewMemo
+            fontSize={props.fontSize}
             controller={controller}
             lines={controller.lines}
             selectFromId={controller.selectFromId}

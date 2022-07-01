@@ -5,6 +5,7 @@ import { SelectCharsController } from './SelectCharsController'
 import { TextMeasureStyle } from './styles'
 
 export interface TextMeasureProps {
+  fontSize?: number
   text: string | SelectCharsText | SelectCharsText[]
   setLines: (lines: SelectCharsTextLine[]) => void
 }
@@ -18,7 +19,13 @@ export function TextMeasure(props: TextMeasureProps) {
     return <TextMeasureText text={props.text} />
   }
 
-  return <TextMeasureString text={props.text} setLines={props.setLines} />
+  return (
+    <TextMeasureString
+      fontSize={props.fontSize}
+      text={props.text}
+      setLines={props.setLines}
+    />
+  )
 }
 
 export function TextMeasureString(
@@ -41,6 +48,7 @@ export function TextMeasureString(
         TextMeasureStyle.text,
         {
           paddingTop: padding,
+          fontSize: props.fontSize,
         },
       ]}
       onTextLayout={(evt) => {

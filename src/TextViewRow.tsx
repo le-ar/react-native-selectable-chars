@@ -59,6 +59,7 @@ function countSelectedChars(
 }
 
 export function TextViewRow(props: {
+  fontSize?: number
   lineId: number
   line: SelectCharsLine
   top: number
@@ -83,6 +84,7 @@ export function TextViewRow(props: {
       {line.text.map((char) => (
         <TextViewCharLayout
           key={char.id}
+          fontSize={props.fontSize}
           {...props}
           char={char}
           lineId={props.lineId}
@@ -93,6 +95,7 @@ export function TextViewRow(props: {
 }
 
 export function TextViewCharLayout(props: {
+  fontSize?: number
   lineId: number
   char: Char
   top: number
@@ -134,6 +137,7 @@ export function TextViewCharLayout(props: {
 export const TextViewCharMemo = React.memo(TextViewChar)
 
 export function TextViewChar(props: {
+  fontSize?: number
   char: Char
   selectFromId: number
   selectToId: number
@@ -164,6 +168,7 @@ export function TextViewChar(props: {
     <Text
       style={{
         backgroundColor: getBackgroundColor(),
+        fontSize: props.fontSize,
       }}
       onLayout={props.onLayout}
     >

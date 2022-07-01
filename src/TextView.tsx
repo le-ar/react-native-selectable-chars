@@ -6,6 +6,7 @@ import { TextViewRowMemo } from './TextViewRow'
 export const TextViewMemo = React.memo(TextView)
 
 export interface TextViewProps {
+  fontSize?: number
   lines: SelectCharsLine[]
 
   selectFromId: number
@@ -55,6 +56,7 @@ export function TextView(props: TextViewProps) {
             selectToId={props.controller.selectToId}
             selections={selections}
             controller={props.controller}
+            fontSize={props.fontSize}
           />
         )
       })}
