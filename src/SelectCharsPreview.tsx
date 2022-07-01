@@ -2,6 +2,7 @@ import React from 'react'
 import { View, Text } from 'react-native'
 import { Char, CharPos, CustomSelection } from './models'
 import { SelectCharsController } from './SelectCharsController'
+import { SelectCharsPreviewStyle } from './styles'
 import { TextViewChar } from './TextViewRow'
 
 export interface SelectCharsPreviewProps {
@@ -17,11 +18,15 @@ export function SelectCharsPreview(props: SelectCharsPreviewProps) {
     return null
   }
 
-  const chars = controller.charsPositions.current.filter(
-    (char) =>
-      Math.abs(char.char.id - (controller.currentChar?.char.id ?? -10)) < 3 &&
-      char.line === (controller.currentChar?.line ?? -1)
-  )
+  const currCharId = controller.currentChar?.char.id ?? -10
+  const currLine = controller.currentChar?.line ?? -1
+  const chars: CharPos[] = []
+  for (let i = currCharId - 2; i < currCharId + 3; i++) {
+    const char = controller.charsPositions.current.getById(i)
+    if (char != null && char.line === currLine) {
+      chars.push(char)
+    }
+  }
 
   const width = chars.reduce(
     (sum, char) => char.pos.right - char.pos.left + sum,
@@ -39,21 +44,20 @@ export function SelectCharsPreview(props: SelectCharsPreviewProps) {
     0,
     Math.min(center - width / 2 - 4, props.maxRight - width - 16)
   )
-  const top = Math.max(controller.currentChar.pos.top - 32 - height, -controller.paddingTop)
+  const top = Math.max(
+    controller.currentChar.pos.top - 32 - height,
+    -controller.paddingTop
+  )
 
   return (
     <View
-      style={{
-        position: 'absolute',
-        top,
-        left,
-        backgroundColor: 'white',
-        borderWidth: 1,
-        borderRadius: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        zIndex: 2,
-      }}
+      style={[
+        SelectCharsPreviewStyle.container,
+        {
+          top,
+          left,
+        },
+      ]}
     >
       <Text>
         {sorted.map((char) => (

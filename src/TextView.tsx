@@ -7,11 +7,9 @@ export const TextViewMemo = React.memo(TextView)
 
 export interface TextViewProps {
   lines: SelectCharsLine[]
-  charsPositions: React.MutableRefObject<CharPos[]>
 
   selectFromId: number
   selectToId: number
-
   selections?: CustomSelection[]
 
   controller: SelectCharsController
@@ -19,9 +17,6 @@ export interface TextViewProps {
 
 export function TextView(props: TextViewProps) {
   const lines = props.lines
-  const charsPositions = props.charsPositions
-  const selectFromId = props.selectFromId
-  const selectToId = props.selectToId
 
   let prevAscender = -1
   let sumAscender = 0
@@ -56,9 +51,8 @@ export function TextView(props: TextViewProps) {
             key={top}
             line={line}
             top={top}
-            selectFromId={selectFromId}
-            selectToId={selectToId}
-            charsPositions={charsPositions}
+            selectFromId={props.controller.selectFromId}
+            selectToId={props.controller.selectToId}
             selections={selections}
             controller={props.controller}
           />

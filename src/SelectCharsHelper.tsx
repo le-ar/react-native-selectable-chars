@@ -1,7 +1,8 @@
 import React, { useRef } from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import { GestureResponderEvent, Pressable, View } from 'react-native'
 import { CharPos } from './models'
 import { SelectCharsController } from './SelectCharsController'
+import { SelectCharsHelpersStyle } from './styles'
 
 export interface SelectCharsHelpersProps {
   controller: SelectCharsController
@@ -17,31 +18,23 @@ export function SelectCharsHelpers(props: SelectCharsHelpersProps) {
     return null
   }
 
-
-  const firstSelected = props.controller.charsPositions.current.find(
-    (char) => char?.char?.id === props.controller.selectFromId
+  const firstSelected = props.controller.charsPositions.current.getById(
+    props.controller.selectFromId
   )
-  const lastSelected = props.controller.charsPositions.current.find(
-    (char) => char?.char?.id === props.controller.selectToId
+  const lastSelected = props.controller.charsPositions.current.getById(
+    props.controller.selectToId
   )
 
   const startSelectedChar =
-    props.controller.selectFromId > -1
-      ? firstSelected
-      : void 0
+    props.controller.selectFromId > -1 ? firstSelected : void 0
   const endSelectedChar =
-    props.controller.selectToId > -1
-      ? lastSelected
-      : void 0
+    props.controller.selectToId > -1 ? lastSelected : void 0
 
   if (startSelectedChar == null) {
     return null
   }
 
   return (
-    // <View
-    //   style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-    // >
     <React.Fragment>
       <SelectCharsHelper
         selectedChar={startSelectedChar}
@@ -54,7 +47,6 @@ export function SelectCharsHelpers(props: SelectCharsHelpersProps) {
         controller={props.controller}
       />
     </React.Fragment>
-    // </View>
   )
 }
 
@@ -104,93 +96,75 @@ export function SelectCharsHelper(props: SelectCharsHelperProps) {
     }
   }
 
+  const onPressIn = (e: GestureResponderEvent) => {
+    locationPosStart.current = { x: horizontalCenter, y: verticalCenter }
+    pagePosStart.current = {
+      x: e.nativeEvent.pageX,
+      y: e.nativeEvent.pageY,
+    }
+    controller.setIsSelecting('helper')
+
+    if (props.isStart) {
+      controller.setStartSelectedId(controller.selectToId)
+    } else {
+      controller.setStartSelectedId(controller.selectFromId)
+    }
+    controller.setEndSelectedId(props.selectedChar!.char.id)
+  }
+
+  const onTouchMove = (e: GestureResponderEvent) => {
+    const pos = locationPosFromPage(e.nativeEvent.pageX, e.nativeEvent.pageY)
+    controller.continueSelect(pos.x, pos.y)
+  }
+
+  const chEnd = (e: GestureResponderEvent) => {
+    controller.setIsSelecting()
+  }
+
   return (
     <Pressable
       hitSlop={8}
-      onPressIn={(e) => {
-        locationPosStart.current = { x: horizontalCenter, y: verticalCenter }
-        pagePosStart.current = {
-          x: e.nativeEvent.pageX,
-          y: e.nativeEvent.pageY,
-        }
-        controller.setIsSelecting('helper')
-
-        if (props.isStart) {
-          controller.setStartSelectedId(controller.selectToId)
-        } else {
-          controller.setStartSelectedId(controller.selectFromId)
-        }
-        controller.setEndSelectedId(props.selectedChar!.char.id)
-      }}
-      onTouchMove={(e) => {
-        const pos = locationPosFromPage(
-          e.nativeEvent.pageX,
-          e.nativeEvent.pageY
-        )
-        controller.continueSelect(pos.x, pos.y)
-      }}
-      onTouchEnd={(e) => {
-        controller.setIsSelecting()
-      }}
-      style={{
-        position: 'absolute',
-        top,
-        left: left - 8,
-        width: 18,
-        height: height + 16,
-      }}
+      onPressIn={onPressIn}
+      onTouchMove={onTouchMove}
+      onTouchEnd={chEnd}
+      style={[
+        SelectCharsHelpersStyle.wrapper,
+        {
+          top,
+          left: left - 8,
+          height: height + 16,
+        },
+      ]}
     >
       <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 8,
-          width: 2,
-          height,
-          backgroundColor: '#0074ff',
-        }}
+        style={[
+          SelectCharsHelpersStyle.line,
+          {
+            height,
+          },
+        ]}
       />
       <CenterHelper isLeft={!props.isStart} />
     </Pressable>
   )
 }
 
-const styles = StyleSheet.create({
-  ovalRight: {
-    position: 'absolute',
-    left: -2,
-    bottom: 0,
-    width: 16,
-    height: 16,
-    backgroundColor: '#0074ff',
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-  },
-  ovalLeft: {
-    position: 'absolute',
-    left: -2,
-    bottom: 0,
-    width: 16,
-    height: 16,
-    backgroundColor: '#0074ff',
-    borderTopRightRadius: 16,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-  },
-})
-
 const CenterHelper = (props: { isLeft: boolean }) => (
   <View
-    style={{
-      position: 'absolute',
-      bottom: 0,
-      left: props.isLeft ? void 0 : -5,
-      right: props.isLeft ? -1 : void 0,
-      width: 8,
-      height: 12,
-    }}
+    style={[
+      SelectCharsHelpersStyle.oval,
+      {
+        left: props.isLeft ? void 0 : -5,
+        right: props.isLeft ? -1 : void 0,
+      },
+    ]}
   >
-    <View style={props.isLeft ? styles.ovalLeft : styles.ovalRight} />
+    <View
+      style={
+        props.isLeft
+          ? SelectCharsHelpersStyle.ovalLeft
+          : SelectCharsHelpersStyle.ovalRight
+      }
+    />
   </View>
 )

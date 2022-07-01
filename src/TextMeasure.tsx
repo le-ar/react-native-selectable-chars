@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Text, useWindowDimensions } from 'react-native'
 import { SelectCharsText, SelectCharsTextLine } from './models'
 import { SelectCharsController } from './SelectCharsController'
+import { TextMeasureStyle } from './styles'
 
 export interface TextMeasureProps {
   text: string | SelectCharsText | SelectCharsText[]
@@ -36,13 +37,12 @@ export function TextMeasureString(
 
   return (
     <Text
-      style={{
-        opacity: 0,
-        color: 'red',
-        paddingTop: padding,
-        lineHeight: 24,
-        fontSize: 14,
-      }}
+      style={[
+        TextMeasureStyle.text,
+        {
+          paddingTop: padding,
+        },
+      ]}
       onTextLayout={(evt) => {
         const lines: SelectCharsTextLine[] = evt.nativeEvent.lines.map(
           (line) => ({

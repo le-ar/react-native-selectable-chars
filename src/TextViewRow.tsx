@@ -8,6 +8,7 @@ import {
   SelectCharsLine,
 } from './models'
 import { SelectCharsController } from './SelectCharsController'
+import { TextViewStyle } from './styles'
 
 export const TextViewRowMemo = React.memo(
   TextViewRow,
@@ -23,13 +24,13 @@ export const TextViewRowMemo = React.memo(
       nextProps.selectToId
     )
 
-    const prevCustomSelections = prevProps.selections.reduce(
+    const prevCustomSelections: number = prevProps.selections.reduce(
       (sum, selection) =>
         sum +
         countSelectedChars(prevProps.line.text, selection.start, selection.end),
       0
     )
-    const nextCustomSelections = nextProps.selections.reduce(
+    const nextCustomSelections: number = nextProps.selections.reduce(
       (sum, selection) =>
         sum +
         countSelectedChars(nextProps.line.text, selection.start, selection.end),
@@ -40,7 +41,6 @@ export const TextViewRowMemo = React.memo(
       prevProps.lineId === nextProps.lineId &&
       prevCustomSelections === nextCustomSelections &&
       prevSelectedCount === nextSelectedCount &&
-      prevProps.charsPositions === nextProps.charsPositions &&
       isSameSelectCharsLine(prevProps.line, nextProps.line) &&
       prevProps.top === nextProps.top
 
@@ -64,7 +64,6 @@ export function TextViewRow(props: {
   top: number
   selectFromId: number
   selectToId: number
-  charsPositions: React.MutableRefObject<CharPos[]>
   selections: CustomSelection[]
   controller: SelectCharsController
 }) {
@@ -73,18 +72,13 @@ export function TextViewRow(props: {
 
   return (
     <View
-      style={{
-        height: line.height,
-        position: 'absolute',
-        overflow: 'hidden',
-        top: top,
-        left: 0,
-        display: 'flex',
-        flexDirection: 'row',
-        flexWrap: 'nowrap',
-        alignItems: 'flex-end',
-        zIndex: 1,
-      }}
+      style={[
+        TextViewStyle.row,
+        {
+          height: line.height,
+          top: top,
+        },
+      ]}
     >
       {line.text.map((char) => (
         <TextViewCharLayout
@@ -104,11 +98,10 @@ export function TextViewCharLayout(props: {
   top: number
   selectFromId: number
   selectToId: number
-  charsPositions: React.MutableRefObject<CharPos[]>
   selections: CustomSelection[]
   controller: SelectCharsController
 }) {
-  const charsPositions = props.charsPositions
+  const charsPositions = props.controller.charsPositions
 
   const onLayout = useCallback(
     (e: LayoutChangeEvent) => {
@@ -122,11 +115,11 @@ export function TextViewCharLayout(props: {
         bottom: top + e.nativeEvent.layout.y + e.nativeEvent.layout.height,
       }
 
-      charsPositions.current[char.id] = {
+      charsPositions.current.setChar({
         char,
         line: props.lineId,
         pos,
-      }
+      })
 
       if (props.selections.length > 0) {
         props.controller.setHintUpdateId((u) => u + 1)

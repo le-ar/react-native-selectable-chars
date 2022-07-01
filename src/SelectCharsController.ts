@@ -13,11 +13,12 @@ import {
   SelectCharsLine,
   SelectCharsTextLine,
 } from './models'
+import { SelectCharsPositions } from './SelectCharsPositions'
 
 export interface SelectCharsController {
   lines: SelectCharsLine[]
   textLines: SelectCharsTextLine[]
-  charsPositions: React.MutableRefObject<CharPos[]>
+  charsPositions: React.MutableRefObject<SelectCharsPositions>
 
   isSelecting?: string
   setIsSelecting: (isSeleting?: string) => void
@@ -43,6 +44,9 @@ export interface SelectCharsController {
 
   hintUpdateId: number
   setHintUpdateId: (cb: (hintUpdateId: number) => number) => void
+
+  isReady: boolean
+  setIsReady: (isReady: boolean) => void
 }
 
 export function useSelectCharsController(
@@ -66,10 +70,13 @@ export function useSelectCharsController(
     [textLines]
   )
 
+  const [isReady, setIsReady] = useState<boolean>(false)
   const [contextMenu, setContextMenu] = useState<JSX.Element>()
   const [hintUpdateId, setHintUpdateId] = useState<number>(0)
   const [isSelecting, setIsSelectingR] = useState<string>()
-  const charsPositions = useRef<CharPos[]>([])
+  const charsPositions = useRef<SelectCharsPositions>(
+    new SelectCharsPositions(textLength)
+  )
   const [startSelectId, setStartSelectedId] = useState(-1)
   const [endSelectId, setEndSelectedId] = useState(-1)
   const selectFromId =
@@ -81,22 +88,21 @@ export function useSelectCharsController(
   const selectToId = startSelectId < endSelectId ? endSelectId : startSelectId
   const endSelectIdRef = useRef(-1)
 
-  const initCharPositions = () => {
-    charsPositions.current = Array.from({ length: textLength }).map(
-      (_, i) =>
-        ({
-          char: { char: '', id: i },
-          line: -1,
-          pos: { left: 0, right: 0, top: 0, bottom: 0 },
-        } as CharPos)
-    )
-  }
-
   const cancelSelect = () => {
     setStartSelectedId(-1)
     setEndSelectedId(-1)
     setIsSelectingR(void 0)
   }
+
+  useEffect(() => {
+    const remove = charsPositions.current.addListener(() => {
+      setIsReady(true)
+    })
+
+    return () => {
+      remove()
+    }
+  }, [])
 
   useEffect(() => {
     if (isSelecting == null) {
@@ -105,27 +111,23 @@ export function useSelectCharsController(
       }
       if (onSelect != null) {
         if (selectFromId > -1) {
-          const startX = charsPositions.current[selectFromId].pos.left
-          const startY = charsPositions.current[selectFromId].pos.top
-          const line = charsPositions.current[selectFromId].line
-          let width = 0
-          const firstLine = charsPositions.current.filter((char) => {
-            if (
-              char.line === line &&
-              selectFromId <= char.char.id &&
-              char.char.id <= selectToId
-            ) {
-              width += char.pos.right - char.pos.left
-              return true
-            }
-            return false
-          })
+          const selectedFromChar = charsPositions.current.getById(selectFromId)
+          if (selectedFromChar == null) {
+            return
+          }
+
+          const startX = selectedFromChar.pos.left
+          const startY = selectedFromChar.pos.top
+          const firstLineWidth = charsPositions.current.getFirstLineWidth(
+            selectFromId,
+            selectToId
+          )
 
           const result = onSelect(
             selectFromId,
             selectToId,
             startY,
-            startX + width / 2,
+            startX + firstLineWidth / 2,
             cancelSelect
           )
           if (result === false) {
@@ -156,38 +158,18 @@ export function useSelectCharsController(
     setEndSelectedId(endSelectId)
   }
 
-  const prevLines = useRef<SelectCharsLine[]>([])
-  // useLayoutEffect(() => {
-  //   if (lines.length === prevLines.current.length) {
-  //     const isSame = lines.every((l, i) =>
-  //       isSameSelectCharsLine(l, prevLines.current[i])
-  //     )
-  //     if (isSame) {
-  //       return
-  //     }
-  //   }
-
-  //   prevLines.current = lines
-  //   initCharPositions()
-  // }, [lines])
   useLayoutEffect(() => {
-    initCharPositions()
+    charsPositions.current.init(textLength)
   }, [textLength])
 
   const currentChar = useMemo(
-    () => charsPositions.current.find((char) => char.char.id === endSelectId),
+    () => charsPositions.current.getById(endSelectId),
     [endSelectId, lines]
   )
 
   const findByTouch = useCallback(
     (x: number, y: number) => {
-      return charsPositions.current.find(
-        (cp) =>
-          cp.pos.left <= x &&
-          x <= cp.pos.right &&
-          cp.pos.top <= y &&
-          y <= cp.pos.bottom
-      )
+      return charsPositions.current.findByPosition(x, y)
     },
     [charsPositions.current]
   )
@@ -211,9 +193,7 @@ export function useSelectCharsController(
     if (startSelectId > -1 && selectEnabled) {
       const char = findByTouch(x, y)
 
-      const currChar = charsPositions.current.find(
-        (char) => char.char.id === endSelectIdRef.current
-      )
+      const currChar = charsPositions.current.getById(endSelectIdRef.current)
       if (char == null && currChar != null) {
         const curr = currChar.pos
         const nextChar = findByTouch(x, curr.top + curr.bottom - curr.top)
@@ -238,6 +218,8 @@ export function useSelectCharsController(
   }, [selectEnabled])
 
   return {
+    isReady,
+    setIsReady,
     paddingTop,
     paddingLeft,
     lines,

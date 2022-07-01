@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { useState } from 'react'
 import {
+  ActivityIndicator,
   GestureResponderEvent,
   NativeModules,
   Pressable,
@@ -62,6 +63,7 @@ export const SelectChars = (props: SelectCharsProps) => {
   return (
     <View style={{ paddingTop: paddintTop, paddingHorizontal: paddingLeft }}>
       <View
+        style={{ opacity: controller.isReady ? 1 : 0 }}
         onLayout={(e) => {
           setLayoutWidth(e.nativeEvent.layout.width)
           setLayoutHeight(e.nativeEvent.layout.height)
@@ -86,7 +88,6 @@ export const SelectChars = (props: SelectCharsProps) => {
           <TextViewMemo
             controller={controller}
             lines={controller.lines}
-            charsPositions={controller.charsPositions}
             selectFromId={controller.selectFromId}
             selectToId={controller.selectToId}
             selections={props.selections}
@@ -109,6 +110,22 @@ export const SelectChars = (props: SelectCharsProps) => {
         layoutHeight={layoutHeight}
         layoutWidth={layoutWidth}
       />
+      {controller.isReady || (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <ActivityIndicator size='large' />
+        </View>
+      )}
     </View>
   )
 }
