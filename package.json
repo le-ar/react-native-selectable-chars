@@ -1,7 +1,7 @@
 {
   "name": "react-native-select-chars",
   "version": "1.0.0",
-  "description": "",
+  "description": "Selectable Chars",
   "homepage": "https://github.com/le-ar/react-native-selectable-chars",
   "main": "src/index.tsx",
   "types": "lib/index.d.ts",
