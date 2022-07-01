@@ -46,6 +46,7 @@ export interface SelectCharsController {
 }
 
 export function useSelectCharsController(
+  selectEnabled: boolean,
   textLength: number,
   paddingTop: number,
   paddingLeft: number,
@@ -67,7 +68,7 @@ export function useSelectCharsController(
 
   const [contextMenu, setContextMenu] = useState<JSX.Element>()
   const [hintUpdateId, setHintUpdateId] = useState<number>(0)
-  const [isSelecting, setIsSelecting] = useState<string>()
+  const [isSelecting, setIsSelectingR] = useState<string>()
   const charsPositions = useRef<CharPos[]>([])
   const [startSelectId, setStartSelectedId] = useState(-1)
   const [endSelectId, setEndSelectedId] = useState(-1)
@@ -94,7 +95,7 @@ export function useSelectCharsController(
   const cancelSelect = () => {
     setStartSelectedId(-1)
     setEndSelectedId(-1)
-    setIsSelecting(void 0)
+    setIsSelectingR(void 0)
   }
 
   useEffect(() => {
@@ -130,7 +131,7 @@ export function useSelectCharsController(
           if (result === false) {
             setStartSelectedId(-1)
             setEndSelectedId(-1)
-            setIsSelecting(void 0)
+            setIsSelectingR(void 0)
           } else if (React.isValidElement(result as {})) {
             setContextMenu(result as JSX.Element)
           }
@@ -192,10 +193,14 @@ export function useSelectCharsController(
   )
 
   const startSelect = (x: number, y: number) => {
+    if (!selectEnabled) {
+      return
+    }
+
     const char = findByTouch(x, y)
 
     if (char !== null) {
-      setIsSelecting('default')
+      setIsSelectingR('default')
     }
 
     setStartSelectedId(char?.char.id ?? -1)
@@ -203,7 +208,7 @@ export function useSelectCharsController(
   }
 
   const continueSelect = (x: number, y: number) => {
-    if (startSelectId > -1) {
+    if (startSelectId > -1 && selectEnabled) {
       const char = findByTouch(x, y)
 
       const currChar = charsPositions.current.find(
@@ -219,6 +224,18 @@ export function useSelectCharsController(
       setEndSelectedIdR(char?.char.id ?? endSelectIdRef.current)
     }
   }
+
+  const setIsSelecting = (isSelecting?: string) => {
+    if (selectEnabled) {
+      setIsSelectingR(isSelecting)
+    }
+  }
+
+  useEffect(() => {
+    if (!selectEnabled) {
+      cancelSelect()
+    }
+  }, [selectEnabled])
 
   return {
     paddingTop,

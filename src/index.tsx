@@ -17,7 +17,7 @@ import { TextMeasure } from './TextMeasure'
 import { TextViewMemo } from './TextView'
 
 export interface SelectCharsProps {
-  // text: string | SelectCharsText | SelectCharsText[]
+  selectEnabled?: boolean
   text: string
   onStartSelect?: () => void
   onEndSelect?: () => void
@@ -39,6 +39,7 @@ export const SelectChars = (props: SelectCharsProps) => {
   const paddingLeft = 8
 
   const controller = useSelectCharsController(
+    props.selectEnabled ?? true,
     props.text.length,
     paddintTop,
     paddingLeft,

@@ -19,10 +19,10 @@ export function SelectCharsHelpers(props: SelectCharsHelpersProps) {
 
 
   const firstSelected = props.controller.charsPositions.current.find(
-    (char) => char.char.id === props.controller.selectFromId
+    (char) => char?.char?.id === props.controller.selectFromId
   )
   const lastSelected = props.controller.charsPositions.current.find(
-    (char) => char.char.id === props.controller.selectToId
+    (char) => char?.char?.id === props.controller.selectToId
   )
 
   const startSelectedChar =
