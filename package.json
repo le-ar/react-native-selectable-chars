@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Selectable Chars",
   "homepage": "https://github.com/le-ar/react-native-selectable-chars",
-  "main": "src/index.tsx",
+  "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "author": "Andrei <malmuk2013@gmail.com>",
   "license": "MIT",
