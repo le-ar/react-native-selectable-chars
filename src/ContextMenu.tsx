@@ -17,7 +17,7 @@ export function ContextMenu(props: ContextMenuProps) {
   const firstSelected = controller.charsPositions.current.getById(
     controller.selectFromId
   )
-  if (props.controller.contextMenu == null || firstSelected == null) {
+  if (props.controller.contextMenu == null || firstSelected == null || controller.isSelecting != null) {
     return null
   }
 

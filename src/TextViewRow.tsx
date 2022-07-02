@@ -38,6 +38,7 @@ export const TextViewRowMemo = React.memo(
     )
 
     const isSame: boolean =
+      prevProps.selections === nextProps.selections &&
       prevProps.lineId === nextProps.lineId &&
       prevCustomSelections === nextCustomSelections &&
       prevSelectedCount === nextSelectedCount &&
