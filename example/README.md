@@ -3,7 +3,7 @@
 ## Getting Started
 
 ```bash
-yarn
+pnpm i
 ```
 
 for iOS:
@@ -15,13 +15,13 @@ npx pod-install
 To run the app use:
 
 ```bash
-yarn ios
+pnpm ios
 ```
 
 or
 
 ```bash
-yarn android
+pnpm android
 ```
 
 ## Updating project
