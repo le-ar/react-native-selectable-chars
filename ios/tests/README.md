@@ -29,3 +29,13 @@ controller autoscroll, highlights, hints without text mutation, clearing on docu
 replacement/disable, and suppression of system edit actions. Synthetic gesture
 tests exercise the controller directly; actual UIKit recognizer arbitration,
 selection-handle interaction and physical-device performance need integration testing.
+
+Color tests check independent exact RGBA fill and native handle tint, unchanged
+selection/scroll/text storage/font/layout identities when colors change, dynamic
+color resolution, and viewport-bounded vector fill after book-long selection,
+scrolling and resizing. A test-only subclass exercises the iOS 16 visual fallback
+on any installed runtime: it checks public caret geometry and that selection fill
+stays behind native glyphs. Transparent tint preserves the public handle objects,
+their frames, hit-test results and gesture inventory on the tested runtime; these
+unit checks do not establish real handle dragging on iOS 16. Run on an installed
+iOS 16 runtime or device for that integration coverage.

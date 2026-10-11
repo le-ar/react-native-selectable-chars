@@ -19,6 +19,7 @@ class RNSelectCharsViewManager : SimpleViewManager<RNSelectCharsView>(), RNSelec
   override fun setFontFamily(view: RNSelectCharsView, value: String?) = view.setFontFamily(value)
   override fun setTextColor(view: RNSelectCharsView, value: Int?) = view.setTextColor(value)
   override fun setSelectionColor(view: RNSelectCharsView, value: Int?) = view.setSelectionColor(value)
+  override fun setSelectionHandleColor(view: RNSelectCharsView, value: Int?) = view.setSelectionHandleColor(value)
   override fun setSelectEnabled(view: RNSelectCharsView, value: Boolean) = view.setSelectEnabled(value)
   override fun setAllowFontScaling(view: RNSelectCharsView, value: Boolean) = view.setAllowFontScaling(value)
 

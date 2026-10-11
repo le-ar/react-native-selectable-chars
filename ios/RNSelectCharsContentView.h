@@ -20,8 +20,8 @@ NS_ASSUME_NONNULL_BEGIN
         lineHeight:(CGFloat)lineHeight
         fontFamily:(NSString *)fontFamily
   allowFontScaling:(BOOL)allowFontScaling
-         textColor:(UIColor *)textColor
-    selectionColor:(UIColor *)selectionColor;
+         textColor:(UIColor *)textColor;
+- (void)setSelectionColor:(UIColor *)selectionColor handleColor:(UIColor *)handleColor;
 - (void)setHighlights:(NSArray<RNSelectCharsHighlight *> *)highlights;
 - (void)clearSelection;
 - (void)setSelectionFrom:(NSInteger)start to:(NSInteger)end;

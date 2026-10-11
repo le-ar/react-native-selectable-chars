@@ -63,7 +63,10 @@ using namespace facebook::react;
   const auto &previous = *std::static_pointer_cast<const RNSelectCharsViewProps>(_props);
   const auto &next = *std::static_pointer_cast<const RNSelectCharsViewProps>(props);
   _documentVersion = next.documentVersion;
-  BOOL textChanged = previous.text != next.text;
+  // The JS adapter increments this revision whenever it replaces the text.
+  // Comparing the full string here would make a color toggle scan the book.
+  BOOL textChanged = previous.documentVersion != next.documentVersion ||
+      (previous.text.empty() && !next.text.empty());
   if (textChanged) {
     [_textContent setDocument:[[NSString alloc] initWithBytes:next.text.data()
                                                     length:next.text.size()
@@ -71,13 +74,16 @@ using namespace facebook::react;
   }
   if (previous.fontSize != next.fontSize || previous.lineHeight != next.lineHeight ||
       previous.fontFamily != next.fontFamily || previous.allowFontScaling != next.allowFontScaling ||
-      previous.textColor != next.textColor || previous.selectionColor != next.selectionColor) {
+      previous.textColor != next.textColor) {
     [_textContent setFontSize:next.fontSize
                   lineHeight:next.lineHeight
                   fontFamily:[NSString stringWithUTF8String:next.fontFamily.c_str()] ?: @""
             allowFontScaling:next.allowFontScaling
-                   textColor:RCTUIColorFromSharedColor(next.textColor) ?: UIColor.labelColor
-              selectionColor:RCTUIColorFromSharedColor(next.selectionColor) ?: UIColor.systemBlueColor];
+                   textColor:RCTUIColorFromSharedColor(next.textColor) ?: UIColor.labelColor];
+  }
+  if (previous.selectionColor != next.selectionColor || previous.selectionHandleColor != next.selectionHandleColor) {
+    [_textContent setSelectionColor:RCTUIColorFromSharedColor(next.selectionColor) ?: [UIColor colorWithRed:0 green:122.0 / 255.0 blue:1 alpha:0.22]
+                       handleColor:RCTUIColorFromSharedColor(next.selectionHandleColor) ?: [UIColor colorWithRed:0 green:122.0 / 255.0 blue:1 alpha:1]];
   }
   BOOL highlightsChanged = previous.highlights.size() != next.highlights.size() ||
       !std::equal(previous.highlights.begin(), previous.highlights.end(), next.highlights.begin(),

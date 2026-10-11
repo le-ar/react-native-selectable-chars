@@ -74,7 +74,7 @@ The menu hides while a selection handle is moving, the reader is scrolling, or i
 
 Give the component a **finite viewport** using `height`, or `flex: 1` inside a bounded parent while overriding the default height. The default height is 320 logical pixels. It scrolls its text internally; rendering a document as an unbounded auto-height child of another vertical `ScrollView` defeats this architecture and can interfere with gestures.
 
-Long press starts selection at a composed character. Drag either handle toward an edge to extend the same range while the document scrolls. Selection is stored as global document offsets and survives Android block recycling. Replacing `text` clears active selection. Saved marks belong to the supplied text; the caller must update them when replacing or editing that text.
+Long press starts selection at a composed character. Drag either handle toward an edge to extend the same range while the document scrolls. A magnifier follows selection gestures. On Android, a short tap clears an existing selection; starting a new selection requires a long press. Selection is stored as global document offsets and survives Android block recycling. Replacing `text` clears active selection. Saved marks belong to the supplied text; the caller must update them when replacing or editing that text.
 
 The whole source string still occupies memory and crosses into the native text engine when it changes. Very large selected passages also produce a JavaScript substring when committed. This is a finite-document reader with lazy native layout, not a promise of unlimited document size or streaming updates. Keep `text` and `selections` stable between actual changes.
 
@@ -96,7 +96,8 @@ The component is available as both the default export and the named `SelectChars
 | `fontFamily` | Native family name; unavailable families fall back to the system font. |
 | `lineHeight` | Positive logical line height; omitted or zero uses native font metrics. |
 | `textColor` | React Native color; default `#222222`. |
-| `selectionColor` | Native active selection tint; default `#B3D4FF`. |
+| `selectionColor` | Active selection background, including alpha; default `rgba(0,122,255,0.22)`. |
+| `selectionHandleColor` | Independent color of active selection handles and boundary stems; default `#007AFF`. |
 | `allowFontScaling` | Default `true`. |
 | `selectEnabled` | Default `true`; disabling clears active selection. Reading and saved highlights remain available. |
 | `selections` | Readonly array of `{start, end, color?, hint?}`. Ends are inclusive; default mark color is `#FFE58A`. |
@@ -107,6 +108,8 @@ The component is available as both the default export and the named `SelectChars
 | `onSelect(start, end, topY, centerX, cancelSelect)` | Compatibility callback. Return JSX to supply the menu when `renderMenu` is absent; return `false` to clear selection. Coordinates are relative to the reader. |
 
 `anchor` is `{x, y, width, height}` in viewport-local logical pixels. It describes the visible selection endpoint, not a per-character geometry array. Hints are small native overlay badges; they do not insert characters into the document or change offsets. Overlapping marks render in the order supplied. Provide accessible labels for your custom menu controls.
+
+Selection colors accept React Native colors. Use a translucent `selectionColor` with opaque handles to keep the boundaries easy to see. Updating either color changes the active selection in place without clearing its range or moving the document. Saved marks use their own `selections[].color` values. The example's **Toggle color** button cycles three pairs on the current selection.
 
 The typed ref exposes:
 
@@ -134,6 +137,8 @@ This is a breaking release requiring the modern React Native architecture and OS
 
 Android caps each layout block at 8,192 UTF-16 units and prefers paragraph/word boundaries. An unusually long paragraph can restart soft wrapping at a block boundary; it never inserts a newline into the source or changes offsets. A pathological single grapheme longer than that cap may span layout blocks, while selection still snaps to a whole grapheme. iOS delegates layout to TextKit 2. Platform line breaking and handle appearance can differ.
 
+Android uses the platform magnifier on API 28+ and a bounded native overlay of the visible text on API 24–27. iOS 17+ customizes the public selection display interaction while retaining system handles. iOS 16 uses native selection overlays for independent colors and retains the `UITextView` selection gestures and loupe.
+
 ## Development and validation
 
 ```sh
@@ -146,7 +151,7 @@ pnpm build
 pnpm codegen
 ```
 
-JavaScript tests cover a million-unit document using one native surface, UTF-16 conversion, repeated passages, custom menu actions, cancellation, drag lifecycle, stale events after text replacement, saved marks, and imperative commands. Android JVM tests cover bounded chunking, large paragraphs, Unicode boundaries, interval queries, and global range math. iOS tests exercise Foundation range helpers and the actual UIKit/TextKit 2 engine with a million-unit document, anchors, and synthetic gesture/autoscroll states; see [ios/tests/README.md](ios/tests/README.md).
+JavaScript tests cover a million-unit document using one native surface, UTF-16 conversion, repeated passages, custom menu actions, cancellation, drag lifecycle, stale events after text replacement, saved marks, imperative commands, and color changes that preserve the active range. Android JVM tests cover bounded chunking, large paragraphs, Unicode boundaries, interval queries, global range math, pointer ownership, and bounded loupe geometry. iOS tests exercise Foundation range helpers and the actual UIKit/TextKit 2 engine with a million-unit document, anchors, and synthetic gesture/autoscroll states; see [ios/tests/README.md](ios/tests/README.md).
 
 From `example/android`, run `./gradlew :app:assembleDebug :react-native-select-chars:testDebugUnitTest`. See the example README for the iOS compile command and manual device scenarios. Compile checks and unit tests do not replace physical-device validation of gesture arbitration, VoiceOver/TalkBack, or release-build scrolling and memory behavior. No cross-device performance benchmark is claimed.
 

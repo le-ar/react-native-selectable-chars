@@ -41,7 +41,10 @@ export interface SelectCharsProps extends Omit<ViewProps, 'children'> {
   fontFamily?: string;
   lineHeight?: number;
   textColor?: ColorValue;
+  /** Active selection background, including alpha; independent of handle color. */
   selectionColor?: ColorValue;
+  /** Color of the active selection handles and boundary stems. */
+  selectionHandleColor?: ColorValue;
   allowFontScaling?: boolean;
   selectEnabled?: boolean;
   selections?: readonly CustomSelection[];

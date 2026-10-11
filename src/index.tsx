@@ -55,7 +55,8 @@ export const SelectChars = forwardRef<SelectCharsRef, SelectCharsProps>(
       fontFamily = '',
       lineHeight = 0,
       textColor = '#222222',
-      selectionColor = '#B3D4FF',
+      selectionColor = 'rgba(0,122,255,0.22)',
+      selectionHandleColor = '#007AFF',
       allowFontScaling = true,
       selectEnabled = true,
       selections = NO_HIGHLIGHTS,
@@ -334,6 +335,7 @@ export const SelectChars = forwardRef<SelectCharsRef, SelectCharsProps>(
           }
           textColor={textColor}
           selectionColor={selectionColor}
+          selectionHandleColor={selectionHandleColor}
           allowFontScaling={allowFontScaling}
           selectEnabled={selectEnabled}
           highlights={highlights}

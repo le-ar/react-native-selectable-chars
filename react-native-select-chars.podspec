@@ -14,7 +14,7 @@ Pod::Spec.new do |s|
 
   s.source       = { :git => "https://github.com/le-ar/react-native-selectable-chars", :tag => "v#{s.version}" }
   s.source_files  = "ios/*.{h,m,mm}"
-  s.frameworks   = ['UIKit', 'CoreGraphics']
+  s.frameworks   = ['UIKit', 'CoreGraphics', 'QuartzCore']
 
   install_modules_dependencies(s)
 end

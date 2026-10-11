@@ -68,7 +68,7 @@ tests.add_file_references(sources.map { |path| project.new_file(File.join(reposi
       'LD_RUNPATH_SEARCH_PATHS' => ['$(inherited)', '@executable_path/Frameworks', '@loader_path/Frameworks']
     )
   end
-  %w[UIKit CoreGraphics].each do |name|
+  %w[UIKit CoreGraphics QuartzCore].each do |name|
     target.frameworks_build_phase.add_file_reference(
       project.frameworks_group.new_file("System/Library/Frameworks/#{name}.framework", :sdk_root)
     )

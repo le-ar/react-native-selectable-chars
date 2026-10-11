@@ -6,6 +6,8 @@ The example pins `react-native-safe-area-context` to 5.8.1. Its [native build co
 
 The demo generates a book of more than a million UTF-16 units once on mount. Its reader has a finite viewport and owns its scrolling. Long press the text and drag a selection handle toward the top or bottom edge to extend a range across screens. The custom menu is React Native JSX with a passage preview, color swatches, and several actions. Saved marks remain when selection is cleared. The controls change font size, select a complete emoji, return to the top, or clear marks.
 
+`Toggle color` cycles the active selection's fill and handles through blue, purple, and green. It updates the two color props while keeping the current range, scroll position, and custom menu.
+
 ## Setup
 
 Requirements: Node 22.11 or newer, pnpm 10, Android SDK 36 and a compatible JDK, or macOS with Xcode and CocoaPods for iOS. The app targets Android API 24+ and iOS 16+.
@@ -69,6 +71,7 @@ These commands check compilation and native integration. They do not measure scr
 - Extend a selection through several chapters in both directions and verify edge autoscrolling.
 - Save gold and blue marks with the custom JSX menu, continue reading, and confirm their ranges remain correct.
 - Select a single character, spaces, line breaks, composed emoji, and mixed right-to-left text.
+- With a range active and its custom menu open, press `Toggle color` repeatedly; check that the fill and handles change together and the range, scroll position, and menu remain intact.
 - Change the font size and device orientation while keeping saved marks.
 - Check VoiceOver or TalkBack, then measure release-build startup, scrolling, selection, and memory on a physical device.
 

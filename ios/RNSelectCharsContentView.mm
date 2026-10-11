@@ -1,4 +1,5 @@
 #import "RNSelectCharsContentView.h"
+#import <QuartzCore/QuartzCore.h>
 
 @implementation RNSelectCharsHighlight
 @end
@@ -12,6 +13,154 @@
 - (BOOL)canPerformAction:(SEL)action withSender:(id)sender
 {
   return NO;
+}
+@end
+
+// A fill-only view, with no text attributes or hit-testing state. UIKit supplies
+// selection geometry; a single path avoids applying alpha twice at overlaps.
+@interface RNSelectCharsSelectionFillView : UIView
+@property (nonatomic, copy) NSArray<NSValue *> *rectangles;
+@property (nonatomic, strong) UIColor *fillColor;
+@end
+
+@implementation RNSelectCharsSelectionFillView {
+  CAShapeLayer *_fillLayer;
+}
+- (instancetype)initWithFrame:(CGRect)frame
+{
+  if ((self = [super initWithFrame:frame])) {
+    self.userInteractionEnabled = NO;
+    self.isAccessibilityElement = NO;
+    self.backgroundColor = UIColor.clearColor;
+    self.opaque = NO;
+    self.clipsToBounds = YES;
+    _fillLayer = [CAShapeLayer layer];
+    _fillLayer.actions = @{ @"path":NSNull.null, @"bounds":NSNull.null,
+                            @"position":NSNull.null, @"fillColor":NSNull.null };
+    [self.layer addSublayer:_fillLayer];
+  }
+  return self;
+}
+- (void)setRectangles:(NSArray<NSValue *> *)rectangles
+{
+  _rectangles = [rectangles copy];
+  [self updatePath];
+}
+- (void)setFillColor:(UIColor *)fillColor
+{
+  _fillColor = fillColor;
+  _fillLayer.fillColor = [fillColor resolvedColorWithTraitCollection:self.traitCollection].CGColor;
+}
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection
+{
+  [super traitCollectionDidChange:previousTraitCollection];
+  _fillLayer.fillColor = [self.fillColor resolvedColorWithTraitCollection:self.traitCollection].CGColor;
+}
+- (void)layoutSubviews
+{
+  [super layoutSubviews];
+  [self updatePath];
+}
+- (void)updatePath
+{
+  CGRect extent = CGRectNull;
+  for (NSValue *value in self.rectangles) {
+    CGRect rect = CGRectIntersection(value.CGRectValue, self.bounds);
+    if (!CGRectIsNull(rect) && !CGRectIsEmpty(rect)) extent = CGRectUnion(extent, rect);
+  }
+  // UIKit can size the parent highlight to the entire selected document. Its
+  // empty backing layer holds only a vector sublayer bounded by visible fill.
+  _fillLayer.frame = CGRectIsNull(extent) ? CGRectZero : extent;
+  CGMutablePathRef path = CGPathCreateMutable();
+  for (NSValue *value in self.rectangles) {
+    CGRect rect = CGRectIntersection(value.CGRectValue, self.bounds);
+    if (!CGRectIsNull(rect) && !CGRectIsEmpty(rect)) {
+      CGPathAddRect(path, NULL, CGRectOffset(rect, -extent.origin.x, -extent.origin.y));
+    }
+  }
+  _fillLayer.path = path;
+  CGPathRelease(path);
+}
+@end
+
+API_AVAILABLE(ios(17.0))
+@interface RNSelectCharsSelectionHighlightView : RNSelectCharsSelectionFillView <UITextSelectionHighlightView>
+@property (nonatomic, strong) NSArray<UITextSelectionRect *> *selectionRects;
+@property (nonatomic, weak) UITextView *textView;
+@property (nonatomic, copy) NSRange (^visibleRangeProvider)(void);
+- (void)refreshVisibleGeometry;
+@end
+
+@implementation RNSelectCharsSelectionHighlightView
+- (void)setSelectionRects:(NSArray<UITextSelectionRect *> *)selectionRects
+{
+  // UIKit may pass all rectangles in a book-long selection and give this view
+  // a document-sized frame. Retain its protocol state without iterating it;
+  // render only geometry queried for the current viewport into a vector layer.
+  _selectionRects = selectionRects;
+  [self refreshVisibleGeometry];
+}
+- (void)layoutSubviews
+{
+  [super layoutSubviews];
+  [self refreshVisibleGeometry];
+}
+- (void)refreshVisibleGeometry
+{
+  NSMutableArray<NSValue *> *rectangles = [NSMutableArray new];
+  UITextView *textView = self.textView;
+  NSRange visible = self.visibleRangeProvider ? self.visibleRangeProvider() : NSMakeRange(NSNotFound, 0);
+  if (visible.location != NSNotFound && textView.selectedRange.length > 0) {
+    NSRange intersection = NSIntersectionRange(visible, textView.selectedRange);
+    if (intersection.length > 0) {
+      UITextPosition *start = [textView positionFromPosition:textView.beginningOfDocument offset:intersection.location];
+      UITextPosition *end = [textView positionFromPosition:start offset:intersection.length];
+      UITextRange *range = [textView textRangeFromPosition:start toPosition:end];
+      CGRect viewport = [textView convertRect:textView.bounds toView:self];
+      for (UITextSelectionRect *rect in [textView selectionRectsForRange:range]) {
+        CGRect clipped = CGRectIntersection([textView convertRect:rect.rect toView:self], viewport);
+        if (!CGRectIsEmpty(clipped) && !CGRectIsNull(clipped)) [rectangles addObject:[NSValue valueWithCGRect:clipped]];
+      }
+    }
+  }
+  self.rectangles = rectangles;
+}
+@end
+
+@interface RNSelectCharsSelectionHandleOverlay : UIView
+@property (nonatomic, copy) NSArray<NSDictionary *> *handles;
+@property (nonatomic, strong) UIColor *handleColor;
+@end
+
+@implementation RNSelectCharsSelectionHandleOverlay
+- (instancetype)initWithFrame:(CGRect)frame
+{
+  if ((self = [super initWithFrame:frame])) {
+    self.userInteractionEnabled = NO;
+    self.isAccessibilityElement = NO;
+    self.backgroundColor = UIColor.clearColor;
+    self.opaque = NO;
+    self.clipsToBounds = YES;
+  }
+  return self;
+}
+- (void)drawRect:(CGRect)rect
+{
+  [self.handleColor setFill];
+  for (NSDictionary *handle in self.handles) {
+    CGRect caret = [handle[@"caret"] CGRectValue];
+    BOOL start = [handle[@"start"] boolValue];
+    CGFloat x = CGRectGetMidX(caret);
+    CGRect stem = CGRectMake(x - 1, CGRectGetMinY(caret), 2, caret.size.height);
+    [[UIBezierPath bezierPathWithRect:stem] fill];
+    CGFloat y = start ? CGRectGetMinY(caret) - 5 : CGRectGetMaxY(caret) + 5;
+    [[UIBezierPath bezierPathWithOvalInRect:CGRectMake(x - 5, y - 5, 10, 10)] fill];
+  }
+}
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection
+{
+  [super traitCollectionDidChange:previousTraitCollection];
+  [self setNeedsDisplay];
 }
 @end
 
@@ -40,6 +189,11 @@
   RNSelectCharsTextView *_textView;
   NSString *_document;
   RNSelectCharsHintOverlay *_hintOverlay;
+  RNSelectCharsSelectionFillView *_selectionBackground;
+  RNSelectCharsSelectionHandleOverlay *_selectionHandles;
+  RNSelectCharsSelectionHighlightView *_systemHighlight API_AVAILABLE(ios(17.0));
+  UIColor *_selectionFillColor;
+  UIColor *_selectionHandleColor;
   NSArray<RNSelectCharsHighlight *> *_highlights;
   NSArray<RNSelectCharsHighlight *> *_hintsByStart;
   CGFloat _fontSize;
@@ -69,6 +223,8 @@
     _textColor = UIColor.labelColor;
     _allowFontScaling = YES;
     _selectionEnabled = YES;
+    _selectionFillColor = [UIColor colorWithRed:0 green:122.0 / 255.0 blue:1 alpha:0.22];
+    _selectionHandleColor = [UIColor colorWithRed:0 green:122.0 / 255.0 blue:1 alpha:1];
     _highlights = @[];
     _hintsByStart = @[];
     // A nil text container explicitly creates a TextKit 2 text view on iOS 16+.
@@ -86,6 +242,13 @@
     _textView.alwaysBounceVertical = YES;
     _textView.accessibilityIdentifier = @"RNSelectCharsText";
     [self addSubview:_textView];
+
+    _selectionBackground = [RNSelectCharsSelectionFillView new];
+    _selectionBackground.hidden = YES;
+    [_textView insertSubview:_selectionBackground atIndex:0];
+    _selectionHandles = [[RNSelectCharsSelectionHandleOverlay alloc] initWithFrame:self.bounds];
+    _selectionHandles.hidden = YES;
+    [self addSubview:_selectionHandles];
 
     _hintOverlay = [[RNSelectCharsHintOverlay alloc] initWithFrame:self.bounds];
     _hintOverlay.userInteractionEnabled = NO;
@@ -125,6 +288,7 @@
   [super layoutSubviews];
   _textView.frame = self.bounds;
   _hintOverlay.frame = self.bounds;
+  _selectionHandles.frame = self.bounds;
   [self schedulePositionUpdate];
 }
 
@@ -188,15 +352,102 @@
         fontFamily:(NSString *)fontFamily
   allowFontScaling:(BOOL)allowFontScaling
          textColor:(UIColor *)textColor
-    selectionColor:(UIColor *)selectionColor
 {
   _fontSize = MAX(1, fontSize);
   _lineHeight = MAX(0, lineHeight);
   _fontFamily = [fontFamily copy];
   _allowFontScaling = allowFontScaling;
   _textColor = textColor;
-  _textView.tintColor = selectionColor;
   [self updateFont];
+}
+
+- (void)setSelectionColor:(UIColor *)selectionColor handleColor:(UIColor *)handleColor
+{
+  _selectionFillColor = selectionColor;
+  _selectionHandleColor = handleColor;
+  [self updateSelectionAppearance];
+}
+
+// Kept as a separate decision so the iOS 16 rendering path can be exercised by
+// the UIKit tests on newer runtimes without private API or OS-version mocking.
+- (BOOL)usesSelectionAppearanceFallback
+{
+  if (@available(iOS 17.0, *)) return NO;
+  return YES;
+}
+
+- (void)updateSelectionAppearance
+{
+  if (@available(iOS 17.0, *)) {
+    if (![self usesSelectionAppearanceFallback]) {
+      for (id<UIInteraction> interaction in _textView.interactions) {
+        if (![interaction isKindOfClass:UITextSelectionDisplayInteraction.class]) continue;
+        UITextSelectionDisplayInteraction *display = (UITextSelectionDisplayInteraction *)interaction;
+        if (display.textInput != _textView) continue;
+        BOOL installed = NO;
+        if (_systemHighlight == nil) {
+          _systemHighlight = [RNSelectCharsSelectionHighlightView new];
+          _systemHighlight.textView = _textView;
+          __weak RNSelectCharsContentView *weakSelf = self;
+          _systemHighlight.visibleRangeProvider = ^NSRange {
+            return weakSelf ? [weakSelf visibleRange] : NSMakeRange(NSNotFound, 0);
+          };
+        }
+        if (display.highlightView != _systemHighlight) {
+          display.highlightView = _systemHighlight;
+          installed = YES;
+        }
+        _systemHighlight.fillColor = _selectionFillColor;
+        if (![_textView.tintColor isEqual:_selectionHandleColor]) _textView.tintColor = _selectionHandleColor;
+        for (UIView<UITextSelectionHandleView> *handle in display.handleViews) handle.tintColor = _selectionHandleColor;
+        if (_textView.selectedRange.length == 0) _systemHighlight.selectionRects = @[];
+        if (installed) [display setNeedsSelectionUpdate];
+        [_systemHighlight refreshVisibleGeometry];
+        _selectionBackground.hidden = YES;
+        _selectionHandles.hidden = YES;
+        return;
+      }
+    }
+  }
+  // On iOS 16 the system has one tint for both fill and handles. Keep its
+  // selection views and hit targets intact, hide only their drawing, and draw
+  // pass-through visuals using the same public UITextInput endpoint geometry.
+  if (![_textView.tintColor isEqual:UIColor.clearColor]) _textView.tintColor = UIColor.clearColor;
+  _selectionBackground.hidden = NO;
+  _selectionHandles.hidden = NO;
+  _selectionBackground.fillColor = _selectionFillColor;
+  _selectionHandles.handleColor = _selectionHandleColor;
+  _selectionBackground.frame = _textView.bounds;
+  [_textView sendSubviewToBack:_selectionBackground];
+  NSMutableArray<NSValue *> *rectangles = [NSMutableArray new];
+  NSMutableArray<NSDictionary *> *handles = [NSMutableArray new];
+  NSRange visible = [self visibleRange];
+  NSRange selected = _textView.selectedRange;
+  if (visible.location != NSNotFound && selected.length > 0 && _textView.isFirstResponder) {
+    NSRange intersection = NSIntersectionRange(selected, visible);
+    if (intersection.length > 0) {
+      for (UITextSelectionRect *rect in [_textView selectionRectsForRange:[self textRange:intersection]]) {
+        CGRect clipped = CGRectIntersection(rect.rect, _textView.bounds);
+        if (!CGRectIsEmpty(clipped) && !CGRectIsNull(clipped)) {
+          [rectangles addObject:[NSValue valueWithCGRect:[_textView convertRect:clipped toView:_selectionBackground]]];
+        }
+      }
+    }
+    NSUInteger endpoints[] = {selected.location, NSMaxRange(selected)};
+    for (NSUInteger index = 0; index < 2; index++) {
+      NSUInteger offset = endpoints[index];
+      if (offset < visible.location || offset > NSMaxRange(visible)) continue;
+      UITextPosition *position = [_textView positionFromPosition:_textView.beginningOfDocument offset:offset];
+      if (position == nil) continue;
+      CGRect caret = [_textView caretRectForPosition:position];
+      if (!CGRectIntersectsRect(caret, _textView.bounds)) continue;
+      [handles addObject:@{@"caret":[NSValue valueWithCGRect:[_textView convertRect:caret toView:_selectionHandles]],
+                           @"start":@(index == 0)}];
+    }
+  }
+  _selectionBackground.rectangles = rectangles;
+  _selectionHandles.handles = handles;
+  [_selectionHandles setNeedsDisplay];
 }
 
 - (void)contentSizeCategoryChanged:(NSNotification *)notification
@@ -313,6 +564,7 @@
 
 - (void)emit:(NSString *)phase
 {
+  [self updateSelectionAppearance];
   if (!self.onSelectionChange) return;
   NSRange range = _textView.selectedRange;
   if (range.length == 0 || range.location == NSNotFound) {
@@ -330,6 +582,7 @@
   _textView.selectedRange = NSMakeRange(0, 0);
   [_textView resignFirstResponder];
   _changingSelection = NO;
+  [self updateSelectionAppearance];
   if (hadSelection) [self emit:@"clear"];
 }
 

@@ -90,6 +90,50 @@ test('renders a million-unit document as one native surface without character el
   expect(tree.root.findAllByType(Text)).toHaveLength(0);
 });
 
+test('defaults to a translucent selection background and independent opaque handles', () => {
+  mount();
+  expect(native().props.selectionColor).toBe('rgba(0,122,255,0.22)');
+  expect(native().props.selectionHandleColor).toBe('#007AFF');
+});
+
+test('changing selection colors preserves the committed range and menu without callbacks or commands', () => {
+  const onSelectionChange = jest.fn();
+  const onSelect = jest.fn();
+  const renderMenu = () => <Text>Menu</Text>;
+  mount({text: 'same', onSelectionChange, onSelect, renderMenu});
+  event('end');
+  const documentVersion = native().props.documentVersion;
+
+  act(() =>
+    tree.update(
+      <SelectChars
+        ref={ref}
+        text="same"
+        selectionColor="rgba(174,37,202,0.22)"
+        selectionHandleColor="#00926C"
+        onSelectionChange={onSelectionChange}
+        onSelect={onSelect}
+        renderMenu={renderMenu}
+      />,
+    ),
+  );
+
+  expect(native().props.selectionColor).toBe('rgba(174,37,202,0.22)');
+  expect(native().props.selectionHandleColor).toBe('#00926C');
+  expect(native().props.documentVersion).toBe(documentVersion);
+  expect(menus()).toHaveLength(1);
+  expect(onSelectionChange).toHaveBeenCalledTimes(1);
+  expect(onSelectionChange).toHaveBeenLastCalledWith({
+    start: 0,
+    end: 3,
+    text: 'same',
+  });
+  expect(onSelect).toHaveBeenCalledTimes(1);
+  expect(Commands.clearSelection).not.toHaveBeenCalled();
+  expect(Commands.setSelection).not.toHaveBeenCalled();
+  expect(Commands.scrollToOffset).not.toHaveBeenCalled();
+});
+
 test('renders arbitrary React controls and converts native exclusive end to public inclusive end', () => {
   const onSelectionChange = jest.fn();
   const press = jest.fn();

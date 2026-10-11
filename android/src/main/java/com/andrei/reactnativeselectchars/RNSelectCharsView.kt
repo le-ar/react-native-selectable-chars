@@ -14,6 +14,7 @@ import android.graphics.Typeface
 import android.icu.text.BreakIterator
 import android.os.Bundle
 import android.os.Build
+import android.os.SystemClock
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
@@ -45,6 +46,8 @@ class RNSelectCharsView(context: Context) : FrameLayout(context) {
   private val manager = LinearLayoutManager(context)
   private val adapter = ChunkAdapter()
   private val overlay = HandleOverlay(context)
+  private val magnifier = SelectionMagnifier(this, recycler) { overlay.invalidate() }
+  private val gesture = SelectionGesture()
   private val graphemes = BreakIterator.getCharacterInstance(Locale.ROOT)
   private var document = ""
   private var documentVersion = 0
@@ -58,14 +61,16 @@ class RNSelectCharsView(context: Context) : FrameLayout(context) {
   private var fontFamily = ""
   private var allowScaling = true
   private var textColorValue = Color.BLACK
-  private var selectedColor = 0x663399FF
+  private var selectedColor = 0x38007AFF
+  private var handleColor = 0xFF007AFF.toInt()
   private var start = -1
   private var end = -1
-  private var dragging = false
   private var activeStart = false
   private var gestureAnchor = -1
   private var touchX = 0f
   private var touchY = 0f
+  private var dragTouchOffsetX = 0f
+  private var dragTouchOffsetY = 0f
   private var attached = false
   private var positionScheduled = false
   private var readyForLayout = false
@@ -89,7 +94,7 @@ class RNSelectCharsView(context: Context) : FrameLayout(context) {
 
   private val autoScroll = object : Runnable {
     override fun run() {
-      if (!dragging || !attached) return
+      if (!gesture.isDragging || !attached) return
       val margin = min(height / 3f, 56f * density)
       val direction = when {
         touchY < margin -> -((margin - touchY) / margin).coerceIn(0f, 1f)
@@ -100,6 +105,7 @@ class RNSelectCharsView(context: Context) : FrameLayout(context) {
         recycler.scrollBy(0, (direction * 18f * density).toInt())
         updateDrag(touchX, touchY.coerceIn(1f, max(1f, height - 1f)))
       }
+      updateMagnifier()
       postOnAnimation(this)
     }
   }
@@ -108,10 +114,8 @@ class RNSelectCharsView(context: Context) : FrameLayout(context) {
     override fun onDown(event: MotionEvent): Boolean = true
 
     override fun onSingleTapUp(event: MotionEvent): Boolean {
-      if (!enabledSelection || document.isEmpty()) return false
-      val offset = hitTest(event.x, event.y, true) ?: return false
-      selectCharacter(offset)
-      emit("end")
+      if (!enabledSelection || !gesture.canClearOnTap) return false
+      if (start >= 0) clearSelection()
       return true
     }
 
@@ -185,7 +189,8 @@ class RNSelectCharsView(context: Context) : FrameLayout(context) {
   fun setFontFamily(value: String?) { if (fontFamily != value.orEmpty()) { fontFamily = value.orEmpty(); resetLayouts() } }
   fun setAllowFontScaling(value: Boolean) { if (allowScaling != value) { allowScaling = value; resetLayouts() } }
   fun setTextColor(value: Int?) { textColorValue = value ?: Color.BLACK; resetLayouts() }
-  fun setSelectionColor(value: Int?) { selectedColor = value ?: 0x663399FF; invalidateVisible() }
+  fun setSelectionColor(value: Int?) { selectedColor = value ?: 0x38007AFF; invalidateVisible() }
+  fun setSelectionHandleColor(value: Int?) { handleColor = value ?: 0xFF007AFF.toInt(); overlay.invalidate() }
   fun setSelectEnabled(value: Boolean) {
     enabledSelection = value
     if (!value) { stopDrag(); clearSelection() }
@@ -274,6 +279,7 @@ class RNSelectCharsView(context: Context) : FrameLayout(context) {
 
   override fun dispatchTouchEvent(event: MotionEvent): Boolean {
     if (!enabledSelection) return super.dispatchTouchEvent(event)
+    if (event.actionMasked == MotionEvent.ACTION_DOWN) gesture.down()
     if (event.actionMasked == MotionEvent.ACTION_DOWN && start >= 0) {
       val first = endpoint(start, false)
       val last = endpoint(end, true)
@@ -282,28 +288,33 @@ class RNSelectCharsView(context: Context) : FrameLayout(context) {
       if (near(first) || near(last)) {
         activeStart = near(first) && (!near(last) || abs(event.x - first!!.x) < abs(event.x - last!!.x))
         gestureAnchor = -1
-        beginDrag(event)
+        val source = endpoint(if (activeStart) start else end, !activeStart, true)
+        beginDrag(event, source)
         return true
       }
     }
-    if (dragging) {
+    if (gesture.isDragging) {
       touchX = event.x
       touchY = event.y
       when (event.actionMasked) {
-        MotionEvent.ACTION_MOVE -> updateDrag(event.x, event.y)
+        MotionEvent.ACTION_MOVE -> { updateDrag(event.x, event.y); updateMagnifier() }
         MotionEvent.ACTION_UP -> { stopDrag(); emit("end") }
         MotionEvent.ACTION_CANCEL -> { stopDrag(); emit("end") }
       }
       return true
     }
     detector.onTouchEvent(event)
+    if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) gesture.finish()
     return super.dispatchTouchEvent(event)
   }
 
-  private fun beginDrag(event: MotionEvent) {
-    dragging = true
+  private fun beginDrag(event: MotionEvent, source: PointF? = null) {
+    gesture.drag()
+    cancelTouchDetector()
     touchX = event.x
     touchY = event.y
+    dragTouchOffsetX = if (source == null) 0f else event.x - source.x
+    dragTouchOffsetY = if (source == null) 0f else event.y - source.y
     recycler.stopScroll()
     parent?.requestDisallowInterceptTouchEvent(true)
     val cancel = MotionEvent.obtain(event)
@@ -311,15 +322,30 @@ class RNSelectCharsView(context: Context) : FrameLayout(context) {
     recycler.dispatchTouchEvent(cancel)
     cancel.recycle()
     emit("start")
+    updateMagnifier()
     removeCallbacks(autoScroll)
     postOnAnimation(autoScroll)
   }
 
   private fun stopDrag() {
-    dragging = false
+    gesture.finish()
+    cancelTouchDetector()
+    magnifier.dismiss()
     gestureAnchor = -1
     removeCallbacks(autoScroll)
     parent?.requestDisallowInterceptTouchEvent(false)
+  }
+
+  private fun cancelTouchDetector() {
+    val now = SystemClock.uptimeMillis()
+    val cancel = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
+    detector.onTouchEvent(cancel)
+    cancel.recycle()
+  }
+
+  private fun updateMagnifier() {
+    if (!gesture.isDragging || !enabledSelection || start < 0) { magnifier.dismiss(); return }
+    magnifier.show(touchX - dragTouchOffsetX, touchY - dragTouchOffsetY)
   }
 
   private fun selectCharacter(offset: Int) {
@@ -330,7 +356,7 @@ class RNSelectCharsView(context: Context) : FrameLayout(context) {
   }
 
   private fun updateDrag(x: Float, y: Float) {
-    val offset = hitTest(x, y.coerceIn(0f, max(0f, height - 1f))) ?: return
+    val offset = hitTest(x - dragTouchOffsetX, (y - dragTouchOffsetY).coerceIn(0f, max(0f, height - 1f))) ?: return
     val previousStart = start
     val previousEnd = end
     if (gestureAnchor >= 0) {
@@ -365,11 +391,11 @@ class RNSelectCharsView(context: Context) : FrameLayout(context) {
     return row.offsetAt(x - row.left, y - row.top, character)
   }
 
-  private fun endpoint(offset: Int, trailing: Boolean): PointF? {
+  private fun endpoint(offset: Int, trailing: Boolean, lineCenter: Boolean = false): PointF? {
     if (offset < 0 || chunks.isEmpty()) return null
     val index = TextChunks.find(chunks, if (trailing && offset > 0) offset - 1 else offset)
     val row = manager.findViewByPosition(index) as? ChunkView ?: return null
-    val point = row.caret(offset, trailing) ?: return null
+    val point = row.caret(offset, trailing, lineCenter) ?: return null
     point.offset(row.left.toFloat(), row.top.toFloat())
     return if (point.y >= 0f && point.y <= height) point else null
   }
@@ -558,14 +584,15 @@ class RNSelectCharsView(context: Context) : FrameLayout(context) {
       return textLayout.getLineTop(textLayout.getLineForOffset((offset - chunk.start).coerceIn(0, value.length)))
     }
 
-    fun caret(offset: Int, trailing: Boolean): PointF? {
+    fun caret(offset: Int, trailing: Boolean, lineCenter: Boolean = false): PointF? {
       val textLayout = layout ?: return null
       val local = (offset - chunk.start).coerceIn(0, value.length)
       val line = textLayout.getLineForOffset(if (trailing && local > 0) local - 1 else local)
       val x = if (trailing && textLayout.getLineForOffset(local) != line) {
         if (textLayout.getParagraphDirection(line) == Layout.DIR_RIGHT_TO_LEFT) textLayout.getLineLeft(line) else textLayout.getLineRight(line)
       } else textLayout.getPrimaryHorizontal(local)
-      return PointF(x, textLayout.getLineBottom(line).toFloat())
+      val y = if (lineCenter) (textLayout.getLineTop(line) + textLayout.getLineBottom(line)) / 2f else textLayout.getLineBottom(line).toFloat()
+      return PointF(x, y)
     }
 
     override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
@@ -603,13 +630,14 @@ class RNSelectCharsView(context: Context) : FrameLayout(context) {
     init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO; isClickable = false }
     override fun onDraw(canvas: Canvas) {
       if (start < 0 || !enabledSelection) return
-      paint.color = selectedColor or -0x1000000
+      paint.color = handleColor
       listOf(endpoint(start, false), endpoint(end, true)).forEach { point ->
         if (point != null) {
           canvas.drawRect(point.x - density, point.y - fontSize * density, point.x + density, point.y, paint)
           canvas.drawCircle(point.x, point.y + 5f * density, 6f * density, paint)
         }
       }
+      magnifier.drawFallback(canvas)
     }
   }
 }

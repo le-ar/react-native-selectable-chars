@@ -34,6 +34,7 @@ export interface NativeProps extends ViewProps {
   fontFamily?: WithDefault<string, ''>;
   textColor?: ColorValue;
   selectionColor?: ColorValue;
+  selectionHandleColor?: ColorValue;
   selectEnabled?: WithDefault<boolean, true>;
   allowFontScaling?: WithDefault<boolean, true>;
   highlights?: ReadonlyArray<NativeHighlight>;

@@ -8,6 +8,11 @@ import SelectChars, {
 
 const GOLD = '#ffe29a';
 const BLUE = '#b9dcff';
+const SELECTION_COLORS = [
+  { selectionColor: 'rgba(0,122,255,0.22)', selectionHandleColor: '#007AFF' },
+  { selectionColor: 'rgba(174,37,202,0.22)', selectionHandleColor: '#AE25CA' },
+  { selectionColor: 'rgba(0,146,108,0.22)', selectionHandleColor: '#00926C' },
+] as const;
 
 function createBook(): string {
   const paragraph =
@@ -44,8 +49,10 @@ function Reader() {
   const text = useMemo(createBook, []);
   const reader = useRef<SelectCharsRef>(null);
   const [fontSize, setFontSize] = useState(18);
+  const [colorIndex, setColorIndex] = useState(0);
   const [selecting, setSelecting] = useState(false);
   const [selections, setSelections] = useState<CustomSelection[]>([]);
+  const selectionColors = SELECTION_COLORS[colorIndex];
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
@@ -65,6 +72,13 @@ function Reader() {
           </Button>
           <Button onPress={() => setFontSize(value => Math.min(30, value + 2))}>
             A+
+          </Button>
+          <Button
+            onPress={() =>
+              setColorIndex(index => (index + 1) % SELECTION_COLORS.length)
+            }
+          >
+            Toggle color
           </Button>
           <Button onPress={() => reader.current?.scrollToOffset(0)}>Top</Button>
           <Button
@@ -93,6 +107,8 @@ function Reader() {
         style={styles.reader}
         text={text}
         fontSize={fontSize}
+        selectionColor={selectionColors.selectionColor}
+        selectionHandleColor={selectionColors.selectionHandleColor}
         selectEnabled
         selections={selections}
         onStartSelect={() => setSelecting(true)}
