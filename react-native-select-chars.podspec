@@ -10,10 +10,11 @@ Pod::Spec.new do |s|
 
   s.authors      = package['author']
   s.homepage     = package['homepage']
-  s.platform     = :ios, "10.0"
+  s.platform     = :ios, "16.0"
 
   s.source       = { :git => "https://github.com/le-ar/react-native-selectable-chars", :tag => "v#{s.version}" }
-  s.source_files  = "ios/**/*.{h,m,swift}"
+  s.source_files  = "ios/*.{h,m,mm}"
+  s.frameworks   = ['UIKit', 'CoreGraphics']
 
-  s.dependency 'React'
+  install_modules_dependencies(s)
 end

@@ -26,6 +26,7 @@ DerivedData
 build/
 .idea
 .gradle
+.cxx/
 local.properties
 *.iml
 *.hprof
@@ -63,3 +64,8 @@ buck-out/
 
 # Library
 lib/
+
+# Generated native bindings and local verification output
+.generated/
+coverage/
+*.tgz

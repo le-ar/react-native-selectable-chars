@@ -2,17 +2,18 @@
   "compilerOptions": {
     "declaration": true,
     "esModuleInterop": true,
-    "jsx": "react",
-    "lib": ["ESNext"],
-    "module": "ESNext",
+    "jsx": "react-jsx",
+    "lib": ["ES2022"],
+    "module": "CommonJS",
     "moduleResolution": "Node",
     "noEmitOnError": true,
-    "outDir": "./lib",
+    "outDir": "lib",
+    "rootDir": "src",
     "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
-    "target": "ES2018",
+    "target": "ES2020"
   },
-  "exclude": ["**/__tests__/*"],
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/__tests__"]
 }

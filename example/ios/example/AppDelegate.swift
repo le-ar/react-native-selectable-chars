@@ -1,51 +1,48 @@
 import UIKit
-#if DEBUG && FB_SONARKIT_ENABLED
-import FlipperKit
-#endif
+import React
+import React_RCTAppDelegate
+import ReactAppDependencyProvider
 
-@UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate, RCTBridgeDelegate {
+@main
+class AppDelegate: UIResponder, UIApplicationDelegate {
+  private(set) var reactNativeDelegate: ReactNativeDelegate?
+  private(set) var reactNativeFactory: RCTReactNativeFactory?
+  private(set) var launchOptions: [UIApplication.LaunchOptionsKey: Any]?
 
-  var window: UIWindow?
+  func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+  ) -> Bool {
+    let delegate = ReactNativeDelegate()
+    let factory = RCTReactNativeFactory(delegate: delegate)
+    delegate.dependencyProvider = RCTAppDependencyProvider()
 
-  func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-    initializeFlipper(with: application)
-
-    let bridge = RCTBridge(delegate: self, launchOptions: launchOptions)
-    let rootView = RCTRootView(bridge: bridge!, moduleName: "example", initialProperties: nil)
-
-    if #available(iOS 13.0, *) {
-      rootView.backgroundColor = UIColor.systemBackground
-    } else {
-      rootView.backgroundColor = UIColor.white
-    }
-
-    window = UIWindow(frame: UIScreen.main.bounds)
-    let rootViewController = UIViewController()
-    rootViewController.view = rootView
-    window?.rootViewController = rootViewController
-    window?.makeKeyAndVisible()
+    reactNativeDelegate = delegate
+    reactNativeFactory = factory
+    self.launchOptions = launchOptions
 
     return true
   }
 
-  func sourceURL(for bridge: RCTBridge!) -> URL! {
-    #if DEBUG
-    return RCTBundleURLProvider.sharedSettings()?.jsBundleURL(forBundleRoot: "index", fallbackResource: nil)
-    #else
-    return Bundle.main.url(forResource: "main", withExtension: "jsbundle")
-    #endif
+  func application(
+    _ application: UIApplication,
+    configurationForConnecting connectingSceneSession: UISceneSession,
+    options: UIScene.ConnectionOptions
+  ) -> UISceneConfiguration {
+    UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+  }
+}
+
+class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
+  override func sourceURL(for bridge: RCTBridge) -> URL? {
+    self.bundleURL()
   }
 
-  private func initializeFlipper(with application: UIApplication) {
-    #if DEBUG && FB_SONARKIT_ENABLED
-    let client = FlipperClient.shared()
-    let layoutDescriptionMapper = SKDescriptorMapper(defaults: ())
-    client?.add(FlipperKitLayoutPlugin(rootNode: application, with: layoutDescriptionMapper))
-    client?.add(FKUserDefaultsPlugin(suiteName: nil))
-    client?.add(FlipperKitReactPlugin())
-    client?.add(FlipperKitNetworkPlugin(networkAdapter: SKIOSNetworkAdapter()))
-    client?.start()
-    #endif
+  override func bundleURL() -> URL? {
+#if DEBUG
+    RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
+#else
+    Bundle.main.url(forResource: "main", withExtension: "jsbundle")
+#endif
   }
 }

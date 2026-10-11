@@ -1,144 +1,361 @@
-import * as React from 'react'
-import { useState } from 'react'
+import * as React from 'react';
 import {
-  ActivityIndicator,
-  GestureResponderEvent,
-  NativeModules,
-  Pressable,
-  View,
-} from 'react-native'
-import { ContextMenu } from './ContextMenu'
-import { CustomSelection } from './models'
-import { useSelectCharsController } from './SelectCharsController'
-import { SelectCharsHelpers } from './SelectCharsHelper'
-import { SelectCharsPreview } from './SelectCharsPreview'
-import { SelectionsHints } from './SelectionsHints'
-import { SelectCharsStyle } from './styles'
-import { TextMeasure } from './TextMeasure'
-import { TextViewMemo } from './TextView'
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {processColor, StyleSheet, View} from 'react-native';
+import type {HostComponent, NativeSyntheticEvent} from 'react-native';
+import type {
+  MenuAnchor,
+  SelectCharsProps,
+  SelectCharsRef,
+  TextSelection,
+} from './models';
+import {SelectionMenu} from './SelectionMenu';
+import {
+  EMPTY_ANCHOR,
+  equalAnchor,
+  toNativeRange,
+  validHighlights,
+} from './selection';
+import NativeSelectCharsView, {
+  Commands,
+} from './specs/NativeSelectCharsViewNativeComponent';
+import type {
+  NativeHighlight,
+  NativeProps,
+  NativeSelectionEvent,
+} from './specs/NativeSelectCharsViewNativeComponent';
 
-export interface SelectCharsProps {
-  fontSize?: number
-  selectEnabled?: boolean
-  text: string
-  onStartSelect?: () => void
-  onEndSelect?: () => void
-  selections?: CustomSelection[]
-  onSelect?: (
-    start: number,
-    end: number,
-    topY: number,
-    centerX: number,
-    cancelSelect: () => void
-  ) => void | false | JSX.Element
-}
+export type {
+  CustomSelection,
+  MenuAnchor,
+  SelectCharsProps,
+  SelectCharsRef,
+  SelectionMenuContext,
+  TextSelection,
+} from './models';
 
-export const SelectChars = (props: SelectCharsProps) => {
-  const [layoutWidth, setLayoutWidth] = useState(0)
-  const [layoutHeight, setLayoutHeight] = useState(0)
+const NO_HIGHLIGHTS: readonly never[] = [];
+const DEFAULT_HIGHLIGHT_COLOR = -6774;
 
-  const paddintTop = 40
-  const paddingLeft = 8
-
-  const controller = useSelectCharsController(
-    props.selectEnabled ?? true,
-    props.text.length,
-    paddintTop,
-    paddingLeft,
-    props.onStartSelect,
-    props.onEndSelect,
-    props.onSelect
-  )
-
-  const onLongPress = (e: GestureResponderEvent) => {
-    controller.startSelect(e.nativeEvent.locationX, e.nativeEvent.locationY)
-  }
-
-  const onTouchMove = (e: GestureResponderEvent) => {
-    if (controller.isSelecting == null) {
-      return
+/** A bounded native reading viewport. The source string is never split into
+ * React elements, and selection geometry never crosses the JS boundary. */
+export const SelectChars = forwardRef<SelectCharsRef, SelectCharsProps>(
+  function SelectCharsComponent(
+    {
+      text,
+      fontSize = 16,
+      fontFamily = '',
+      lineHeight = 0,
+      textColor = '#222222',
+      selectionColor = '#B3D4FF',
+      allowFontScaling = true,
+      selectEnabled = true,
+      selections = NO_HIGHLIGHTS,
+      onStartSelect,
+      onEndSelect,
+      onSelectionChange,
+      onSelect,
+      renderMenu,
+      menuStyle,
+      style,
+      onLayout,
+      ...viewProps
+    },
+    forwardedRef,
+  ) {
+    const nativeRef =
+      useRef<React.ComponentRef<HostComponent<NativeProps>>>(null);
+    const document = useRef({text, version: 0});
+    if (document.current.text !== text) {
+      document.current = {
+        text,
+        version: (document.current.version + 1) % 0x7fffffff,
+      };
     }
-    controller.continueSelect(e.nativeEvent.locationX, e.nativeEvent.locationY)
-  }
+    const version = document.current.version;
+    const callbacks = useRef({
+      onStartSelect,
+      onEndSelect,
+      onSelectionChange,
+      onSelect,
+      selectEnabled,
+    });
+    callbacks.current = {
+      onStartSelect,
+      onEndSelect,
+      onSelectionChange,
+      onSelect,
+      selectEnabled,
+    };
+    const mounted = useRef(true);
+    const dragActive = useRef(false);
+    const clearEpoch = useRef(0);
+    const committed = useRef<{
+      selection: TextSelection;
+      version: number;
+    } | null>(null);
+    const [selection, setSelectionState] = useState<TextSelection | null>(null);
+    const [anchor, setAnchor] = useState<MenuAnchor>(EMPTY_ANCHOR);
+    const [legacyMenu, setLegacyMenu] = useState<React.ReactNode>(null);
+    const [dragging, setDragging] = useState(false);
+    const [viewport, setViewport] = useState({width: 0, height: 0});
 
-  return (
-    <View
-      style={{
-        paddingTop: paddintTop,
-        paddingHorizontal: paddingLeft,
-      }}
-    >
+    const finishDrag = useCallback(() => {
+      if (dragActive.current) {
+        dragActive.current = false;
+        setDragging(false);
+        callbacks.current.onEndSelect?.();
+      }
+    }, []);
+
+    const clearLocalSelection = useCallback(() => {
+      clearEpoch.current += 1;
+      finishDrag();
+      const hadSelection = committed.current !== null;
+      committed.current = null;
+      setSelectionState(null);
+      setAnchor(EMPTY_ANCHOR);
+      setLegacyMenu(null);
+      if (hadSelection) {
+        callbacks.current.onSelectionChange?.(null);
+      }
+    }, [finishDrag]);
+
+    const cancelSelect = useCallback(() => {
+      if (nativeRef.current) {
+        Commands.clearSelection(nativeRef.current);
+      }
+      clearLocalSelection();
+    }, [clearLocalSelection]);
+
+    useImperativeHandle(
+      forwardedRef,
+      () => ({
+        clearSelection: cancelSelect,
+        setSelection: (start, end) => {
+          const range = toNativeRange(document.current.text.length, start, end);
+          if (!range) {
+            throw new RangeError(
+              'Selection must be a non-empty inclusive UTF-16 range within text.',
+            );
+          }
+          if (nativeRef.current && callbacks.current.selectEnabled) {
+            Commands.setSelection(nativeRef.current, range.start, range.end);
+          }
+        },
+        scrollToOffset: (offset, animated = true) => {
+          if (
+            !Number.isInteger(offset) ||
+            offset < 0 ||
+            offset > document.current.text.length
+          ) {
+            throw new RangeError(
+              'Scroll offset must be an integer UTF-16 position within text.',
+            );
+          }
+          if (nativeRef.current) {
+            Commands.scrollToOffset(nativeRef.current, offset, animated);
+          }
+        },
+      }),
+      [cancelSelect],
+    );
+
+    const previousVersion = useRef(version);
+    useLayoutEffect(() => {
+      if (previousVersion.current !== version || !selectEnabled) {
+        cancelSelect();
+      }
+      previousVersion.current = version;
+    }, [version, selectEnabled, cancelSelect]);
+
+    useEffect(() => {
+      mounted.current = true;
+      return () => {
+        mounted.current = false;
+        if (dragActive.current) {
+          dragActive.current = false;
+          callbacks.current.onEndSelect?.();
+        }
+      };
+    }, []);
+
+    const highlights = useMemo<NativeHighlight[]>(
+      () =>
+        validHighlights(text.length, selections).map((highlight) => {
+          const color = processColor(highlight.color ?? '#FFE58A');
+          return {
+            start: highlight.start,
+            end: highlight.end + 1,
+            color:
+              typeof color === 'number'
+                ? color > 0x7fffffff
+                  ? color - 0x100000000
+                  : color
+                : DEFAULT_HIGHLIGHT_COLOR,
+            hint: highlight.hint ?? '',
+          };
+        }),
+      [text.length, selections],
+    );
+
+    const onNativeSelectionChange = useCallback(
+      ({nativeEvent: event}: NativeSyntheticEvent<NativeSelectionEvent>) => {
+        if (
+          !mounted.current ||
+          event.documentVersion !== document.current.version
+        ) {
+          return;
+        }
+        if (event.phase === 'clear') {
+          clearLocalSelection();
+          return;
+        }
+        if (!callbacks.current.selectEnabled) {
+          return;
+        }
+        const nextAnchor: MenuAnchor = {
+          x: Number.isFinite(event.anchorX) ? event.anchorX : 0,
+          y: Number.isFinite(event.anchorY) ? event.anchorY : 0,
+          width: Number.isFinite(event.anchorWidth)
+            ? Math.max(0, event.anchorWidth)
+            : 0,
+          height: Number.isFinite(event.anchorHeight)
+            ? Math.max(0, event.anchorHeight)
+            : 0,
+        };
+        if (event.phase === 'position') {
+          if (
+            committed.current?.selection.start === event.start &&
+            committed.current.selection.end + 1 === event.end
+          ) {
+            setAnchor((current) =>
+              equalAnchor(current, nextAnchor) ? current : nextAnchor,
+            );
+          }
+          return;
+        }
+        if (event.phase === 'start' || event.phase === 'change') {
+          if (!dragActive.current) {
+            dragActive.current = true;
+            setDragging(true);
+            callbacks.current.onStartSelect?.();
+          }
+          return;
+        }
+        if (event.phase !== 'end') {
+          return;
+        }
+        finishDrag();
+        const source = document.current.text;
+        if (!toNativeRange(source.length, event.start, event.end - 1)) {
+          clearLocalSelection();
+          return;
+        }
+        const previous = committed.current;
+        const next: TextSelection = {
+          start: event.start,
+          end: event.end - 1,
+          text: source.slice(event.start, event.end),
+        };
+        committed.current = {
+          selection: next,
+          version: document.current.version,
+        };
+        setSelectionState(next);
+        setAnchor(nextAnchor);
+        const epoch = clearEpoch.current;
+        const result = callbacks.current.onSelect?.(
+          next.start,
+          next.end,
+          nextAnchor.y,
+          nextAnchor.x + nextAnchor.width / 2,
+          cancelSelect,
+        );
+        if (epoch !== clearEpoch.current) {
+          return;
+        }
+        if (result === false) {
+          cancelSelect();
+          return;
+        }
+        setLegacyMenu(result ?? null);
+        if (
+          previous?.selection.start !== next.start ||
+          previous.selection.end !== next.end ||
+          previous.version !== document.current.version
+        ) {
+          callbacks.current.onSelectionChange?.(next);
+        }
+      },
+      [cancelSelect, clearLocalSelection, finishDrag],
+    );
+
+    const currentSelection =
+      committed.current?.version === version ? selection : null;
+    const menu =
+      currentSelection && !dragging && selectEnabled
+        ? renderMenu
+          ? renderMenu({...currentSelection, anchor, cancelSelect})
+          : legacyMenu
+        : null;
+
+    return (
       <View
-        style={{ opacity: controller.isReady ? 1 : 0 }}
-        onLayout={(e) => {
-          setLayoutWidth(e.nativeEvent.layout.width)
-          setLayoutHeight(e.nativeEvent.layout.height)
+        {...viewProps}
+        style={[styles.viewport, style]}
+        onLayout={(event) => {
+          const {width, height} = event.nativeEvent.layout;
+          setViewport((current) =>
+            current.width === width && current.height === height
+              ? current
+              : {width, height},
+          );
+          onLayout?.(event);
         }}
       >
-        <TextMeasure
-          fontSize={props.fontSize}
-          text={props.text}
-          setLines={controller.setLines}
+        <NativeSelectCharsView
+          ref={nativeRef}
+          style={StyleSheet.absoluteFill}
+          text={text}
+          documentVersion={version}
+          fontSize={Number.isFinite(fontSize) && fontSize > 0 ? fontSize : 16}
+          fontFamily={fontFamily}
+          lineHeight={
+            Number.isFinite(lineHeight) && lineHeight > 0 ? lineHeight : 0
+          }
+          textColor={textColor}
+          selectionColor={selectionColor}
+          allowFontScaling={allowFontScaling}
+          selectEnabled={selectEnabled}
+          highlights={highlights}
+          onNativeSelectionChange={onNativeSelectionChange}
         />
-        <Pressable
-          delayLongPress={300}
-          style={SelectCharsStyle.pressable}
-          onLongPress={onLongPress}
-          onTouchMove={onTouchMove}
-          onPressOut={() => {
-            controller.setIsSelecting()
-          }}
-          onPress={() => {
-            if (controller.isSelecting == null) {
-              controller.setStartSelectedId(-1)
-              controller.setEndSelectedId(-1)
-            }
-          }}
-        >
-          <TextViewMemo
-            fontSize={props.fontSize}
-            controller={controller}
-            lines={controller.lines}
-            selectFromId={controller.selectFromId}
-            selectToId={controller.selectToId}
-            selections={props.selections}
-          />
-          <SelectionsHints
-            controller={controller}
-            selections={props.selections}
-          />
-          <SelectCharsPreview
-            controller={controller}
-            selections={props.selections}
-            maxRight={layoutWidth}
-          />
-          <View style={SelectCharsStyle.overlay} />
-        </Pressable>
+        {menu != null &&
+          menu !== false &&
+          anchor.width > 0 &&
+          anchor.height > 0 && (
+            <SelectionMenu
+              anchor={anchor}
+              viewport={viewport}
+              style={menuStyle}
+            >
+              {menu}
+            </SelectionMenu>
+          )}
       </View>
-      <SelectCharsHelpers controller={controller} />
-      <ContextMenu
-        controller={controller}
-        layoutHeight={layoutHeight}
-        layoutWidth={layoutWidth}
-      />
-      {controller.isReady || (
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <ActivityIndicator size='large' />
-        </View>
-      )}
-    </View>
-  )
-}
+    );
+  },
+);
 
-export default NativeModules.RNSelectCharsModule
+const styles = StyleSheet.create({viewport: {height: 320, minHeight: 0}});
+
+export default SelectChars;

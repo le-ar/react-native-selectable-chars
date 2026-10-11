@@ -1,5 +1,1 @@
-module.exports = {
-  jsxSingleQuote: true,
-  semi: false,
-  singleQuote: true,
-}
+module.exports = {singleQuote: true, bracketSpacing: false};

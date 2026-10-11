@@ -1,84 +1,214 @@
-import React, { useEffect, useState } from 'react'
-import {
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
-import RNSelectCharsModule, { SelectChars } from 'react-native-select-chars'
-import { CustomSelection } from '../../src/models'
+import React, { useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import SelectChars, {
+  type CustomSelection,
+  type SelectCharsRef,
+} from 'react-native-select-chars';
 
-const text = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla sit amet mi sed magna porta sodales. Nullam venenatis libero eu placerat volutpat. Sed non velit a urna commodo venenatis in ac dui. Fusce est diam, ultricies vitae mauris in, molestie tempus felis. Vivamus pretium laoreet lectus, in elementum nibh tincidunt non. Aenean pellentesque elementum commodo. Lorem ipsum dolor sit amet, consectetur adipiscing elit. In consequat dui at ligula ultricies, vel facilisis elit molestie. Nam dictum feugiat maximus. Aliquam mattis sodales nulla, eget auctor arcu consequat eget.
-Cras luctus rhoncus nisl, et vulputate ipsum tempor a. Sed porttitor congue massa, tempor porttitor ipsum laoreet eget. Donec et vehicula ex. Phasellus vehicula nec leo eu sollicitudin. Quisque dignissim placerat nulla congue dapibus. Sed ultricies ipsum ex, nec facilisis felis pharetra id. Praesent malesuada volutpat libero eget facilisis. Ut volutpat mauris nisl, sed maximus enim lobortis vitae. Curabitur vulputate, nunc sed facilisis cursus, odio tellus consectetur massa, ac consequat justo nisi eget sem. Phasellus ultrices elementum enim, in rutrum quam luctus id.
-Quisque sodales, ex eget ornare vulputate, tortor odio fermentum dui, a posuere mauris dolor eget orci. Donec vitae sem aliquam lectus maximus bibendum eu sit amet nibh. Integer ultricies sagittis feugiat. Suspendisse odio elit, ultrices id diam nec, ullamcorper convallis metus. Phasellus consectetur congue quam, eget ultricies tellus porttitor vel. Curabitur nisi metus, sodales imperdiet mauris at, aliquam tempor neque. Ut in neque sit amet lorem rhoncus luctus et ac dui. Praesent in libero consequat ipsum hendrerit feugiat. Maecenas tempor, est nec blandit sagittis, nulla nulla tristique turpis, a hendrerit tortor justo quis nulla. Nunc ut purus quis quam gravida faucibus vel eu nunc. Phasellus leo diam, venenatis a sodales sit amet, consectetur vel metus. Ut magna felis, gravida et nunc sit amet, pharetra pharetra ligula. Ut maximus egestas sapien, sed blandit velit venenatis non. Curabitur ut dolor ante. Morbi sed leo lacinia, posuere nulla vel, volutpat felis. Sed vulputate mauris quis augue semper ornare non molestie elit.
+const GOLD = '#ffe29a';
+const BLUE = '#b9dcff';
 
-Nullam eget quam in nulla lobortis ullamcorper. Sed eu massa non erat dignissim tristique. Quisque vitae cursus mauris, id vehicula elit. Nam eget eros pellentesque, porttitor neque in, tincidunt tortor. In ligula felis, blandit egestas posuere sit amet, vehicula eu lacus. Integer sed laoreet elit, sed laoreet dui. Fusce aliquam ipsum non arcu facilisis commodo. Ut fringilla, ante vitae placerat cursus, arcu dui aliquam leo, nec pellentesque magna ligula a sem. Vivamus sed facilisis nibh, vel fringilla justo. Pellentesque vel sodales arcu. Pellentesque fermentum velit quis purus ultrices dapibus. Cras urna turpis, consequat non diam vitae, pulvinar pretium libero.
+function createBook(): string {
+  const paragraph =
+    'A native text view lays out this document while React renders the controls and the selection menu. ' +
+    'Long press a word, then drag either handle toward the edge of the screen to continue selecting across paragraphs. ' +
+    'The whole book is one selection surface, so the range may cross many screens. ' +
+    'Unicode samples: cafe\u0301, 👩🏽‍💻, 👨‍👩‍👧‍👦, 日本語, Привет, مرحبا بالعالم, שלום עולם. ';
 
-Donec faucibus nisl quis hendrerit blandit. Sed nibh ante, faucibus sed facilisis et, pharetra id diam. Donec molestie, nisi quis lacinia maximus, eros dui suscipit ex, id ultrices nulla sapien vitae libero. Nunc pretium aliquam nisl quis rhoncus. Etiam lacus massa, ornare non pharetra venenatis, tristique non urna. Sed lacus risus, volutpat at pretium eget, dapibus quis orci. Mauris egestas elementum lorem euismod molestie. Fusce dictum aliquam orci at rutrum. Duis vitae eros at metus pretium ornare. Integer tellus ex, sollicitudin eget tortor sit amet, dictum finibus purus. Vivamus tincidunt sed turpis ac porta. Donec lacinia rutrum elit, a imperdiet odio.
-
-`
-
-const App = () => {
-  const [selecting, setSelecting] = useState(false)
-
-  return (
-    <SafeAreaView style={{ backgroundColor: 'white' }}>
-      <ScrollView style={{ paddingHorizontal: 16 }} scrollEnabled={!selecting}>
-        <Test setSelecting={setSelecting} />
-      </ScrollView>
-    </SafeAreaView>
-  )
+  return Array.from(
+    { length: 2000 },
+    (_, index) => `Chapter ${index + 1}\n\n${paragraph}${paragraph}\n\n`,
+  ).join('');
 }
 
-function Test(props: { setSelecting: (isSelecting: boolean) => void }) {
-  const [selections, setSelections] = useState<CustomSelection[]>([
-    { start: 10, end: 15, hint: '(1)' },
-    { start: 90, end: 92, hint: '(2)' },
-    { start: 17, end: 40, hint: '(3)' },
-  ])
+function Button({
+  children,
+  onPress,
+}: {
+  children: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+    >
+      <Text style={styles.buttonText}>{children}</Text>
+    </Pressable>
+  );
+}
+
+function Reader() {
+  const text = useMemo(createBook, []);
+  const reader = useRef<SelectCharsRef>(null);
+  const [fontSize, setFontSize] = useState(18);
+  const [selecting, setSelecting] = useState(false);
+  const [selections, setSelections] = useState<CustomSelection[]>([]);
 
   return (
-    <SelectChars
-      onStartSelect={() => {
-        props.setSelecting(true)
-      }}
-      onEndSelect={() => {
-        props.setSelecting(false)
-      }}
-      text={text}
-      selections={selections}
-      onSelect={(start, end, y, x, cancelSelect) => {
-        const sub = text.substring(start, end)
-
-        return (
-          <TouchableOpacity
+    <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Selectable Chars 2</Text>
+        <Text style={styles.subtitle}>
+          {text.length.toLocaleString()} UTF-16 units · {selections.length}{' '}
+          saved marks
+        </Text>
+        <Text style={styles.instructions}>
+          Long press, then drag a handle across screens. The selection menu is
+          ordinary React Native JSX.
+        </Text>
+        <View style={styles.controls}>
+          <Button onPress={() => setFontSize(value => Math.max(14, value - 2))}>
+            A−
+          </Button>
+          <Button onPress={() => setFontSize(value => Math.min(30, value + 2))}>
+            A+
+          </Button>
+          <Button onPress={() => reader.current?.scrollToOffset(0)}>Top</Button>
+          <Button
             onPress={() => {
-              setSelections((s) => [
-                ...s,
-                { start, end, hint: `(${s.length + 1})` },
-              ])
-
-              cancelSelect()
+              const start = text.indexOf('👩🏽‍💻');
+              reader.current?.setSelection(start, start + '👩🏽‍💻'.length - 1);
             }}
           >
-            <Text
-              style={{
-                color: 'black',
-                fontWeight: 'bold',
-                fontSize: 12,
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-              }}
-            >
-              Mistake
-            </Text>
-          </TouchableOpacity>
-        )
-      }}
-    />
-  )
+            Select emoji
+          </Button>
+          <Button
+            onPress={() => {
+              reader.current?.clearSelection();
+              setSelections([]);
+            }}
+          >
+            Clear
+          </Button>
+        </View>
+        <Text accessibilityLiveRegion="polite" style={styles.status}>
+          {selecting ? 'Selection active' : 'Ready to select'} · {fontSize}px
+        </Text>
+      </View>
+      <SelectChars
+        ref={reader}
+        style={styles.reader}
+        text={text}
+        fontSize={fontSize}
+        selectEnabled
+        selections={selections}
+        onStartSelect={() => setSelecting(true)}
+        onEndSelect={() => setSelecting(false)}
+        renderMenu={({ start, end, text: selectedText, cancelSelect }) => {
+          const save = (color: string) => {
+            setSelections(previous => [
+              ...previous,
+              { start, end, color, hint: `Mark ${previous.length + 1}` },
+            ]);
+            cancelSelect();
+          };
+
+          return (
+            <View style={styles.menu}>
+              <Text style={styles.menuHeading}>
+                Mark this passage · {end - start + 1} UTF-16 units
+              </Text>
+              <Text numberOfLines={2} style={styles.preview}>
+                {selectedText.slice(0, 120)}
+              </Text>
+              <View style={styles.menuActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Save a gold mark"
+                  onPress={() => save(GOLD)}
+                  style={[styles.markButton, { backgroundColor: GOLD }]}
+                >
+                  <View style={[styles.swatch, styles.goldSwatch]} />
+                  <Text style={styles.markText}>Gold</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Save a blue mark"
+                  onPress={() => save(BLUE)}
+                  style={[styles.markButton, { backgroundColor: BLUE }]}
+                >
+                  <View style={[styles.swatch, styles.blueSwatch]} />
+                  <Text style={styles.markText}>Blue</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={cancelSelect}
+                  style={styles.cancelButton}
+                >
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          );
+        }}
+      />
+    </SafeAreaView>
+  );
 }
 
-export default App
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <Reader />
+    </SafeAreaProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  goldSwatch: { backgroundColor: '#b96b00' },
+  blueSwatch: { backgroundColor: '#165ea1' },
+  screen: { flex: 1, backgroundColor: '#f6f8fc' },
+  header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
+  title: { fontSize: 23, fontWeight: '700', color: '#152b48' },
+  subtitle: { marginTop: 4, fontSize: 12, color: '#4f627b' },
+  instructions: {
+    marginTop: 10,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#354b65',
+  },
+  controls: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  button: {
+    backgroundColor: '#e3eaf5',
+    borderRadius: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+  },
+  pressed: { opacity: 0.65 },
+  buttonText: { color: '#173657', fontWeight: '600', fontSize: 12 },
+  status: { color: '#4f627b', fontSize: 11, marginTop: 8 },
+  reader: { flex: 1, backgroundColor: '#ffffff' },
+  menu: {
+    width: 288,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: '#152b48',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  menuHeading: { color: '#ffffff', fontSize: 12, fontWeight: '700' },
+  preview: { color: '#cfdaeb', fontSize: 12, lineHeight: 17, marginTop: 6 },
+  menuActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  markButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    padding: 8,
+    borderRadius: 8,
+  },
+  swatch: { width: 10, height: 10, borderRadius: 5 },
+  markText: { fontSize: 12, color: '#152b48', fontWeight: '700' },
+  cancelButton: { paddingVertical: 8, paddingHorizontal: 4 },
+  cancelText: { color: '#ffffff', fontSize: 12 },
+});
