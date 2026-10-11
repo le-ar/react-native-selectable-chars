@@ -63,8 +63,8 @@ importers:
         specifier: 0.85.3
         version: 0.85.3(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.3(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.28.5))(@types/react@19.3.0)(react@19.2.3)
       react-native-safe-area-context:
-        specifier: 5.5.2
-        version: 5.5.2(react-native@0.85.3(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.3(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.28.5))(@types/react@19.3.0)(react@19.2.3))(react@19.2.3)
+        specifier: 5.8.1
+        version: 5.8.1(react-native@0.85.3(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.3(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.28.5))(@types/react@19.3.0)(react@19.2.3))(react@19.2.3)
       react-native-select-chars:
         specifier: workspace:*
         version: link:..
@@ -2691,8 +2691,8 @@ packages:
   react-is@19.3.0:
     resolution: {integrity: sha512-UpMYezM4v5/18F28aC66AEsjXIgE02kyEMH6yLdgLXu/UTfa1Ntwck/nNLrbqJsEXW7gPb0coNO9FQse9WTovA==}
 
-  react-native-safe-area-context@5.5.2:
-    resolution: {integrity: sha512-t4YVbHa9uAGf+pHMabGrb0uHrD5ogAusSu842oikJ3YKXcYp6iB4PTGl0EZNkUIR3pCnw/CXKn42OCfhsS0JIw==}
+  react-native-safe-area-context@5.8.1:
+    resolution: {integrity: sha512-dDYVAJcW5LJlXAqTUFAaWvYJovqxrh6HdJlOkdTQ7dXCcKWhCq5vKoDXJc3n1q5rYcAUaIwmToKNPKibnogC4g==}
     peerDependencies:
       react: '*'
       react-native: '*'
@@ -4362,7 +4362,9 @@ snapshots:
       metro-runtime: 0.84.6
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.85.3': {}
 
@@ -6734,7 +6736,7 @@ snapshots:
 
   react-is@19.3.0: {}
 
-  react-native-safe-area-context@5.5.2(react-native@0.85.3(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.3(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.28.5))(@types/react@19.3.0)(react@19.2.3))(react@19.2.3):
+  react-native-safe-area-context@5.8.1(react-native@0.85.3(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.3(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.28.5))(@types/react@19.3.0)(react@19.2.3))(react@19.2.3):
     dependencies:
       react: 19.2.3
       react-native: 0.85.3(@babel/core@7.28.5)(@react-native-community/cli@20.1.0(typescript@5.9.3))(@react-native/jest-preset@0.85.3(@babel/core@7.28.5)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.28.5))(@types/react@19.3.0)(react@19.2.3)

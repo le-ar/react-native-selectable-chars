@@ -2,6 +2,8 @@
 
 A React Native 0.85.3 / React 19.2.3 application linked to the local library through the pnpm workspace. Android uses autolinking and Fabric; iOS uses CocoaPods, the React Native dependency provider, and the UIKit scene lifecycle. There is no manual native linking.
 
+The example pins `react-native-safe-area-context` to 5.8.1. Its [native build configuration](https://github.com/AppAndFlow/react-native-safe-area-context/blob/v5.8.1/android/src/main/jni/CMakeLists.txt) applies the React Native compiler options required for compatible Fabric props layouts; 5.5.2 can crash on Android with React Native 0.85. Rebuild the native application after changing this dependency.
+
 The demo generates a book of more than a million UTF-16 units once on mount. Its reader has a finite viewport and owns its scrolling. Long press the text and drag a selection handle toward the top or bottom edge to extend a range across screens. The custom menu is React Native JSX with a passage preview, color swatches, and several actions. Saved marks remain when selection is cleared. The controls change font size, select a complete emoji, return to the top, or clear marks.
 
 ## Setup
