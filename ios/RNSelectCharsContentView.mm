@@ -84,21 +84,56 @@
 @end
 
 API_AVAILABLE(ios(17.0))
-@interface RNSelectCharsSelectionHighlightView : RNSelectCharsSelectionFillView <UITextSelectionHighlightView>
+@interface RNSelectCharsSelectionHighlightView : UIView <UITextSelectionHighlightView>
 @property (nonatomic, strong) NSArray<UITextSelectionRect *> *selectionRects;
 @property (nonatomic, weak) UITextView *textView;
-@property (nonatomic, copy) NSRange (^visibleRangeProvider)(void);
+@property (nonatomic, strong) UIColor *fillColor;
+@property (nonatomic, strong, readonly) UIView<UITextSelectionHighlightView> *renderer;
+- (instancetype)initWithRenderer:(UIView<UITextSelectionHighlightView> *)renderer;
 - (void)refreshVisibleGeometry;
 @end
 
 @implementation RNSelectCharsSelectionHighlightView
+- (instancetype)initWithRenderer:(UIView<UITextSelectionHighlightView> *)renderer
+{
+  if ((self = [super initWithFrame:renderer.frame])) {
+    _renderer = renderer;
+    self.userInteractionEnabled = NO;
+    self.isAccessibilityElement = NO;
+    self.backgroundColor = UIColor.clearColor;
+    // UIKit can deliver provisional rectangles before updating our old frame.
+    // The native child clips to the viewport; the old wrapper bounds must not.
+    self.clipsToBounds = NO;
+    renderer.userInteractionEnabled = NO;
+    renderer.clipsToBounds = YES;
+  }
+  return self;
+}
 - (void)setSelectionRects:(NSArray<UITextSelectionRect *> *)selectionRects
 {
-  // UIKit may pass all rectangles in a book-long selection and give this view
-  // a document-sized frame. Retain its protocol state without iterating it;
-  // render only geometry queried for the current viewport into a vector layer.
+  // This is UIKit's live geometry during native handle drags. selectedRange can
+  // still describe the previous committed selection. A wrapped long paragraph
+  // can supply thousands of rectangles: forward the same array to its native
+  // renderer without copying, sorting, or traversing the document on each frame.
   _selectionRects = selectionRects;
   [self refreshVisibleGeometry];
+  _renderer.selectionRects = selectionRects;
+  _renderer.tintColor = self.fillColor;
+}
+- (void)setFillColor:(UIColor *)fillColor
+{
+  _fillColor = fillColor;
+  _renderer.tintColor = fillColor;
+}
+- (void)tintColorDidChange
+{
+  [super tintColorDidChange];
+  _renderer.tintColor = self.fillColor;
+}
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection
+{
+  [super traitCollectionDidChange:previousTraitCollection];
+  _renderer.tintColor = self.fillColor;
 }
 - (void)layoutSubviews
 {
@@ -107,23 +142,14 @@ API_AVAILABLE(ios(17.0))
 }
 - (void)refreshVisibleGeometry
 {
-  NSMutableArray<NSValue *> *rectangles = [NSMutableArray new];
-  UITextView *textView = self.textView;
-  NSRange visible = self.visibleRangeProvider ? self.visibleRangeProvider() : NSMakeRange(NSNotFound, 0);
-  if (visible.location != NSNotFound && textView.selectedRange.length > 0) {
-    NSRange intersection = NSIntersectionRange(visible, textView.selectedRange);
-    if (intersection.length > 0) {
-      UITextPosition *start = [textView positionFromPosition:textView.beginningOfDocument offset:intersection.location];
-      UITextPosition *end = [textView positionFromPosition:start offset:intersection.length];
-      UITextRange *range = [textView textRangeFromPosition:start toPosition:end];
-      CGRect viewport = [textView convertRect:textView.bounds toView:self];
-      for (UITextSelectionRect *rect in [textView selectionRectsForRange:range]) {
-        CGRect clipped = CGRectIntersection([textView convertRect:rect.rect toView:self], viewport);
-        if (!CGRectIsEmpty(clipped) && !CGRectIsNull(clipped)) [rectangles addObject:[NSValue valueWithCGRect:clipped]];
-      }
-    }
-  }
-  self.rectangles = rectangles;
+  // Replacing the display interaction's old highlight can detach the renderer.
+  if (_renderer.superview != self) [self addSubview:_renderer];
+  _renderer.hidden = NO;
+  _renderer.alpha = 1;
+  CGRect viewport = self.textView ? [self.textView convertRect:self.textView.bounds toView:self] : self.bounds;
+  if (!CGRectEqualToRect(_renderer.frame, viewport)) _renderer.frame = viewport;
+  if (!CGRectEqualToRect(_renderer.bounds, viewport)) _renderer.bounds = viewport;
+  _renderer.tintColor = self.fillColor;
 }
 @end
 
@@ -386,12 +412,8 @@ API_AVAILABLE(ios(17.0))
         if (display.textInput != _textView) continue;
         BOOL installed = NO;
         if (_systemHighlight == nil) {
-          _systemHighlight = [RNSelectCharsSelectionHighlightView new];
+          _systemHighlight = [[RNSelectCharsSelectionHighlightView alloc] initWithRenderer:display.highlightView];
           _systemHighlight.textView = _textView;
-          __weak RNSelectCharsContentView *weakSelf = self;
-          _systemHighlight.visibleRangeProvider = ^NSRange {
-            return weakSelf ? [weakSelf visibleRange] : NSMakeRange(NSNotFound, 0);
-          };
         }
         if (display.highlightView != _systemHighlight) {
           display.highlightView = _systemHighlight;

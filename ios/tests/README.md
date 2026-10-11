@@ -32,8 +32,17 @@ selection-handle interaction and physical-device performance need integration te
 
 Color tests check independent exact RGBA fill and native handle tint, unchanged
 selection/scroll/text storage/font/layout identities when colors change, dynamic
-color resolution, and viewport-bounded vector fill after book-long selection,
-scrolling and resizing. A test-only subclass exercises the iOS 16 visual fallback
+color resolution, and a viewport-sized native renderer after book-long selection,
+scrolling and resizing. The iOS 17 highlight adapter forwards UIKit's authoritative
+live `selectionRects` array to its original renderer without copying or iterating
+it; it does not recompute provisional geometry from committed `selectedRange`.
+A regression changes live rectangles before selection commit and frame expansion,
+then checks pixels immediately and after layout/color refresh. A long wrapped
+paragraph verifies the native renderer remains viewport-sized even when UIKit
+supplies thousands of rectangles. UIKit's own long-paragraph text layout and
+internal backing allocations remain outside this adapter's control.
+
+A test-only subclass exercises the iOS 16 visual fallback
 on any installed runtime: it checks public caret geometry and that selection fill
 stays behind native glyphs. Transparent tint preserves the public handle objects,
 their frames, hit-test results and gesture inventory on the tested runtime; these

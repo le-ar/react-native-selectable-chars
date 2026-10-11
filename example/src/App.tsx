@@ -102,65 +102,67 @@ function Reader() {
           {selecting ? 'Selection active' : 'Ready to select'} · {fontSize}px
         </Text>
       </View>
-      <SelectChars
-        ref={reader}
-        style={styles.reader}
-        text={text}
-        fontSize={fontSize}
-        selectionColor={selectionColors.selectionColor}
-        selectionHandleColor={selectionColors.selectionHandleColor}
-        selectEnabled
-        selections={selections}
-        onStartSelect={() => setSelecting(true)}
-        onEndSelect={() => setSelecting(false)}
-        renderMenu={({ start, end, text: selectedText, cancelSelect }) => {
-          const save = (color: string) => {
-            setSelections(previous => [
-              ...previous,
-              { start, end, color, hint: `Mark ${previous.length + 1}` },
-            ]);
-            cancelSelect();
-          };
+      <View style={styles.readerContainer}>
+        <SelectChars
+          ref={reader}
+          style={styles.reader}
+          text={text}
+          fontSize={fontSize}
+          selectionColor={selectionColors.selectionColor}
+          selectionHandleColor={selectionColors.selectionHandleColor}
+          selectEnabled
+          selections={selections}
+          onStartSelect={() => setSelecting(true)}
+          onEndSelect={() => setSelecting(false)}
+          renderMenu={({ start, end, text: selectedText, cancelSelect }) => {
+            const save = (color: string) => {
+              setSelections(previous => [
+                ...previous,
+                { start, end, color, hint: `Mark ${previous.length + 1}` },
+              ]);
+              cancelSelect();
+            };
 
-          return (
-            <View style={styles.menu}>
-              <Text style={styles.menuHeading}>
-                Mark this passage · {end - start + 1} UTF-16 units
-              </Text>
-              <Text numberOfLines={2} style={styles.preview}>
-                {selectedText.slice(0, 120)}
-              </Text>
-              <View style={styles.menuActions}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Save a gold mark"
-                  onPress={() => save(GOLD)}
-                  style={[styles.markButton, { backgroundColor: GOLD }]}
-                >
-                  <View style={[styles.swatch, styles.goldSwatch]} />
-                  <Text style={styles.markText}>Gold</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Save a blue mark"
-                  onPress={() => save(BLUE)}
-                  style={[styles.markButton, { backgroundColor: BLUE }]}
-                >
-                  <View style={[styles.swatch, styles.blueSwatch]} />
-                  <Text style={styles.markText}>Blue</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={cancelSelect}
-                  style={styles.cancelButton}
-                >
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </Pressable>
+            return (
+              <View style={styles.menu}>
+                <Text style={styles.menuHeading}>
+                  Mark this passage · {end - start + 1} UTF-16 units
+                </Text>
+                <Text numberOfLines={2} style={styles.preview}>
+                  {selectedText.slice(0, 120)}
+                </Text>
+                <View style={styles.menuActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Save a gold mark"
+                    onPress={() => save(GOLD)}
+                    style={[styles.markButton, { backgroundColor: GOLD }]}
+                  >
+                    <View style={[styles.swatch, styles.goldSwatch]} />
+                    <Text style={styles.markText}>Gold</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Save a blue mark"
+                    onPress={() => save(BLUE)}
+                    style={[styles.markButton, { backgroundColor: BLUE }]}
+                  >
+                    <View style={[styles.swatch, styles.blueSwatch]} />
+                    <Text style={styles.markText}>Blue</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={cancelSelect}
+                    style={styles.cancelButton}
+                  >
+                    <Text style={styles.cancelText}>Cancel</Text>
+                  </Pressable>
+                </View>
               </View>
-            </View>
-          );
-        }}
-      />
+            );
+          }}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -196,6 +198,11 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.65 },
   buttonText: { color: '#173657', fontWeight: '600', fontSize: 12 },
   status: { color: '#4f627b', fontSize: 11, marginTop: 8 },
+  readerContainer: {
+    flex: 1,
+    paddingHorizontal: 12,
+    backgroundColor: '#ffffff',
+  },
   reader: { flex: 1, backgroundColor: '#ffffff' },
   menu: {
     width: 288,

@@ -20,6 +20,30 @@
 @property (nonatomic, copy) NSArray<NSDictionary *> *handles;
 @property (nonatomic, strong) UIColor *handleColor;
 @end
+API_AVAILABLE(ios(17.0))
+@interface RNSelectCharsSelectionHighlightView : UIView <UITextSelectionHighlightView>
+@property (nonatomic, strong) UIColor *fillColor;
+@property (nonatomic, strong, readonly) UIView<UITextSelectionHighlightView> *renderer;
+- (instancetype)initWithRenderer:(UIView<UITextSelectionHighlightView> *)renderer;
+- (void)refreshVisibleGeometry;
+@end
+API_AVAILABLE(ios(17.0))
+@interface RNSelectCharsHighlightRendererSpy : UIView <UITextSelectionHighlightView>
+@property (nonatomic, strong) NSArray<UITextSelectionRect *> *selectionRects;
+@end
+@implementation RNSelectCharsHighlightRendererSpy
+@end
+
+// Inspecting or copying this array is observable without constructing a book's
+// geometry. The adapter must leave interpretation to UIKit's native renderer.
+@interface RNSelectCharsOpaqueSelectionArray : NSArray
+@property (nonatomic) NSUInteger inspections;
+@end
+@implementation RNSelectCharsOpaqueSelectionArray
+- (NSUInteger)count { self.inspections++; return 30000; }
+- (id)objectAtIndex:(NSUInteger)index { self.inspections++; return [UITextSelectionRect new]; }
+- (id)copyWithZone:(NSZone *)zone { self.inspections++; return self; }
+@end
 
 @interface RNSelectCharsFontTrackingView : RNSelectCharsContentView
 @property (nonatomic) NSUInteger fontUpdates;
@@ -43,6 +67,17 @@
 @implementation RNSelectCharsSyntheticLongPress
 - (UIGestureRecognizerState)state { return self.simulatedState; }
 - (CGPoint)locationInView:(UIView *)view { return self.simulatedPoint; }
+@end
+
+@interface RNSelectCharsSyntheticSelectionRect : UITextSelectionRect
+@property (nonatomic) CGRect simulatedRect;
+@end
+@implementation RNSelectCharsSyntheticSelectionRect
+- (CGRect)rect { return self.simulatedRect; }
+- (NSWritingDirection)writingDirection { return NSWritingDirectionLeftToRight; }
+- (BOOL)containsStart { return YES; }
+- (BOOL)containsEnd { return YES; }
+- (BOOL)isVertical { return NO; }
 @end
 
 @interface RNSelectCharsContentViewTests : XCTestCase
@@ -107,13 +142,13 @@
   XCTAssertEqual(NSMaxRange(view.textView.selectedRange), book.length - 1);
   XCTAssertNotNil(view.textView.textLayoutManager);
   if (@available(iOS 17.0, *)) {
-    RNSelectCharsSelectionFillView *fill = nil;
+    RNSelectCharsSelectionHighlightView *fill = nil;
     for (id<UIInteraction> interaction in view.textView.interactions) {
       if ([interaction isKindOfClass:UITextSelectionDisplayInteraction.class]) {
-        fill = (RNSelectCharsSelectionFillView *)((UITextSelectionDisplayInteraction *)interaction).highlightView;
+        fill = (RNSelectCharsSelectionHighlightView *)((UITextSelectionDisplayInteraction *)interaction).highlightView;
       }
     }
-    XCTAssertTrue([fill isKindOfClass:RNSelectCharsSelectionFillView.class]);
+    XCTAssertTrue([fill isKindOfClass:RNSelectCharsSelectionHighlightView.class]);
     [self assertFill:fill isBoundedByViewport:view.textView];
     [view scrollToOffset:4000 animated:NO];
     [self finishLayout:view];
@@ -127,19 +162,16 @@
   [view invalidate];
 }
 
-- (void)assertFill:(RNSelectCharsSelectionFillView *)fill isBoundedByViewport:(UITextView *)textView
+- (void)assertFill:(RNSelectCharsSelectionHighlightView *)fill isBoundedByViewport:(UITextView *)textView API_AVAILABLE(ios(17.0))
 {
   CGRect viewport = [textView convertRect:textView.bounds toView:fill];
-  XCTAssertGreaterThan(fill.rectangles.count, 0u);
-  XCTAssertLessThan(fill.rectangles.count, 100u);
-  for (NSValue *value in fill.rectangles) XCTAssertTrue(CGRectContainsRect(viewport, value.CGRectValue));
-  XCTAssertNil(fill.layer.contents);
-  XCTAssertEqual(fill.layer.sublayers.count, 1u);
-  CAShapeLayer *shape = (CAShapeLayer *)fill.layer.sublayers.firstObject;
-  XCTAssertTrue([shape isKindOfClass:CAShapeLayer.class]);
-  XCTAssertTrue(CGRectContainsRect(viewport, shape.frame));
-  XCTAssertTrue(CGRectContainsRect(shape.bounds, CGPathGetBoundingBox(shape.path)));
-  XCTAssertNil(shape.contents);
+  XCTAssertGreaterThan(fill.selectionRects.count, 0u);
+  XCTAssertGreaterThan(fill.renderer.selectionRects.count, 0u);
+  XCTAssertTrue(CGRectEqualToRect(viewport, fill.renderer.frame));
+  XCTAssertTrue(CGRectEqualToRect(viewport, fill.renderer.bounds));
+  XCTAssertFalse(fill.clipsToBounds);
+  XCTAssertTrue(fill.renderer.clipsToBounds);
+  XCTAssertNil(fill.renderer.layer.contents);
 }
 
 - (void)testAnchorsAreViewportLocalAndOffscreenSelectionIsHidden
@@ -264,6 +296,113 @@
   [view invalidate];
 }
 
+- (NSData *)pixelAtPoint:(CGPoint)point inView:(UIView *)view
+{
+  NSMutableData *pixel = [NSMutableData dataWithLength:4];
+  CGColorSpaceRef colors = CGColorSpaceCreateDeviceRGB();
+  CGContextRef context = CGBitmapContextCreate(pixel.mutableBytes, 1, 1, 8, 4, colors,
+      (CGBitmapInfo)kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+  CGContextTranslateCTM(context, -point.x, -point.y);
+  [view.layer renderInContext:context];
+  CGContextRelease(context);
+  CGColorSpaceRelease(colors);
+  return pixel;
+}
+
+- (void)testLiveHighlightGeometryPrecedesCommittedRangeAndFrame
+{
+  if (@available(iOS 17.0, *)) {
+    RNSelectCharsContentView *view = [self attachedView];
+    [view setDocument:@"committed selection"];
+    [view setSelectionColor:[UIColor colorWithRed:0.25 green:0.5 blue:0.75 alpha:0.4]
+               handleColor:UIColor.greenColor];
+    [view setSelectionFrom:0 to:3];
+    [self finishLayout:view];
+    NSRange committed = view.textView.selectedRange;
+    UIView<UITextSelectionHighlightView> *highlight = nil;
+    for (id<UIInteraction> interaction in view.textView.interactions) {
+      if ([interaction isKindOfClass:UITextSelectionDisplayInteraction.class]) {
+        highlight = ((UITextSelectionDisplayInteraction *)interaction).highlightView;
+      }
+    }
+    XCTAssertNotNil(highlight);
+    // UIKit can deliver provisional geometry before it changes either the
+    // committed selection or the managed highlight's old frame.
+    highlight.frame = CGRectMake(0, 0, 80, 40);
+    RNSelectCharsSyntheticSelectionRect *initial = [RNSelectCharsSyntheticSelectionRect new];
+    initial.simulatedRect = CGRectMake(10, 12, 50, 19);
+    highlight.selectionRects = @[initial];
+    NSData *beforePixel = [self pixelAtPoint:CGPointMake(150, 20) inView:highlight];
+    const unsigned char *before = (const unsigned char *)beforePixel.bytes;
+    XCTAssertEqual(before[3], 0);
+    RNSelectCharsSyntheticSelectionRect *expanded = [RNSelectCharsSyntheticSelectionRect new];
+    expanded.simulatedRect = CGRectMake(10, 12, 180, 19);
+    highlight.selectionRects = @[expanded];
+    NSData *livePixel = [self pixelAtPoint:CGPointMake(150, 20) inView:highlight];
+    const unsigned char *live = (const unsigned char *)livePixel.bytes;
+    XCTAssertEqualWithAccuracy(live[0], 26, 1);
+    XCTAssertEqualWithAccuracy(live[1], 51, 1);
+    XCTAssertEqualWithAccuracy(live[2], 77, 1);
+    XCTAssertEqualWithAccuracy(live[3], 102, 1);
+    XCTAssertTrue(NSEqualRanges(view.textView.selectedRange, committed));
+    highlight.frame = CGRectMake(0, 0, 320, 480);
+    [highlight layoutIfNeeded];
+    [view setSelectionColor:[UIColor colorWithRed:0.25 green:0.5 blue:0.75 alpha:0.4]
+               handleColor:UIColor.greenColor];
+    XCTAssertEqualObjects([self pixelAtPoint:CGPointMake(150, 20) inView:highlight], livePixel);
+    XCTAssertTrue(NSEqualRanges(view.textView.selectedRange, committed));
+    [view invalidate];
+  }
+}
+
+- (void)testHighlightAdapterForwardsLiveArrayWithoutInspectingIt
+{
+  if (@available(iOS 17.0, *)) {
+    RNSelectCharsHighlightRendererSpy *renderer = [[RNSelectCharsHighlightRendererSpy alloc] initWithFrame:CGRectMake(0, 0, 320, 480)];
+    RNSelectCharsSelectionHighlightView *highlight = [[RNSelectCharsSelectionHighlightView alloc] initWithRenderer:renderer];
+    RNSelectCharsOpaqueSelectionArray *geometry = [RNSelectCharsOpaqueSelectionArray new];
+    highlight.fillColor = UIColor.redColor;
+    highlight.selectionRects = geometry;
+    highlight.tintColor = UIColor.greenColor;
+    [highlight layoutIfNeeded];
+    [highlight refreshVisibleGeometry];
+    XCTAssertEqual(highlight.selectionRects, geometry);
+    XCTAssertEqual(renderer.selectionRects, geometry);
+    XCTAssertEqual(geometry.inspections, 0u);
+    XCTAssertEqualObjects(renderer.tintColor, UIColor.redColor);
+  }
+}
+
+- (void)testNativeHighlightKeepsLongParagraphRendererInViewport
+{
+  if (@available(iOS 17.0, *)) {
+    RNSelectCharsContentView *view = [self attachedView];
+    NSMutableString *paragraph = [NSMutableString new];
+    for (NSUInteger index = 0; index < 40000; index++) [paragraph appendString:@"Very long wrapped paragraph. "];
+    [view setDocument:paragraph];
+    [view setSelectionColor:UIColor.redColor handleColor:UIColor.greenColor];
+    [view setSelectionFrom:1 to:paragraph.length - 1];
+    [self finishLayout:view];
+    RNSelectCharsSelectionHighlightView *highlight = nil;
+    for (id<UIInteraction> interaction in view.textView.interactions) {
+      if ([interaction isKindOfClass:UITextSelectionDisplayInteraction.class]) {
+        highlight = (RNSelectCharsSelectionHighlightView *)((UITextSelectionDisplayInteraction *)interaction).highlightView;
+      }
+    }
+    [self assertFill:highlight isBoundedByViewport:view.textView];
+    CGRect viewport = [view.textView convertRect:view.textView.bounds toView:highlight];
+    NSData *pixel = [self pixelAtPoint:CGPointMake(CGRectGetMidX(viewport), CGRectGetMidY(viewport)) inView:highlight];
+    XCTAssertEqual(((const unsigned char *)pixel.bytes)[0], 255);
+    [view scrollToOffset:4000 animated:NO];
+    [self finishLayout:view];
+    [self assertFill:highlight isBoundedByViewport:view.textView];
+    view.frame = CGRectMake(0, 0, 480, 320);
+    [self finishLayout:view];
+    [self assertFill:highlight isBoundedByViewport:view.textView];
+    [view invalidate];
+  }
+}
+
 - (void)checkColorChangesPreserveDocument:(RNSelectCharsFontTrackingView *)view
 {
   NSMutableString *text = [NSMutableString new];
@@ -305,8 +444,8 @@
       if ([interaction isKindOfClass:UITextSelectionDisplayInteraction.class]) display = (UITextSelectionDisplayInteraction *)interaction;
     }
     XCTAssertNotNil(display);
-    RNSelectCharsSelectionFillView *highlight = (RNSelectCharsSelectionFillView *)display.highlightView;
-    XCTAssertTrue([highlight isKindOfClass:RNSelectCharsSelectionFillView.class]);
+    RNSelectCharsSelectionHighlightView *highlight = (RNSelectCharsSelectionHighlightView *)display.highlightView;
+    XCTAssertTrue([highlight isKindOfClass:RNSelectCharsSelectionHighlightView.class]);
     XCTAssertEqualObjects(highlight.fillColor, [UIColor colorWithRed:0.25 green:0.5 blue:0.75 alpha:0.4]);
     XCTAssertEqualObjects(view.textView.tintColor, UIColor.greenColor);
     for (UIView *handle in display.handleViews) XCTAssertEqualObjects(handle.tintColor, UIColor.greenColor);
@@ -318,7 +457,7 @@
     [view scrollToOffset:0 animated:NO];
     [self finishLayout:view];
     XCTAssertNotNil(highlight.superview);
-    XCTAssertGreaterThan(highlight.rectangles.count, 0u);
+    XCTAssertGreaterThan(highlight.renderer.selectionRects.count, 0u);
     NSMutableArray *frames = [NSMutableArray new];
     NSMutableArray *hits = [NSMutableArray new];
     NSArray<UIGestureRecognizer *> *gestures = [view.textView.gestureRecognizers copy];
@@ -416,7 +555,7 @@
       return traits.userInterfaceStyle == UIUserInterfaceStyleDark ? UIColor.redColor : UIColor.blueColor;
     }];
     [view setSelectionColor:dynamic handleColor:UIColor.greenColor];
-    RNSelectCharsSelectionFillView *fill = nil;
+    UIView *fill = nil;
     if (viewClass == RNSelectCharsFallbackTestView.class) {
       for (UIView *child in view.textView.subviews) {
         if ([child isKindOfClass:RNSelectCharsSelectionFillView.class]) fill = (RNSelectCharsSelectionFillView *)child;
@@ -424,7 +563,7 @@
     } else if (@available(iOS 17.0, *)) {
       for (id<UIInteraction> interaction in view.textView.interactions) {
         if ([interaction isKindOfClass:UITextSelectionDisplayInteraction.class]) {
-          fill = (RNSelectCharsSelectionFillView *)((UITextSelectionDisplayInteraction *)interaction).highlightView;
+          fill = ((UITextSelectionDisplayInteraction *)interaction).highlightView;
         }
       }
     } else {
@@ -437,11 +576,22 @@
     NSRange selected = view.textView.selectedRange;
     view.overrideUserInterfaceStyle = UIUserInterfaceStyleLight;
     [self finishLayout:view];
-    CAShapeLayer *shape = (CAShapeLayer *)fill.layer.sublayers.firstObject;
-    XCTAssertTrue(CGColorEqualToColor(shape.fillColor, UIColor.blueColor.CGColor));
+    if (viewClass == RNSelectCharsFallbackTestView.class) {
+      CAShapeLayer *shape = (CAShapeLayer *)fill.layer.sublayers.firstObject;
+      XCTAssertTrue(CGColorEqualToColor(shape.fillColor, UIColor.blueColor.CGColor));
+    } else if (@available(iOS 17.0, *)) {
+      UIView *renderer = ((RNSelectCharsSelectionHighlightView *)fill).renderer;
+      XCTAssertEqualObjects([renderer.tintColor resolvedColorWithTraitCollection:renderer.traitCollection], UIColor.blueColor);
+    }
     view.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
     [self finishLayout:view];
-    XCTAssertTrue(CGColorEqualToColor(shape.fillColor, UIColor.redColor.CGColor));
+    if (viewClass == RNSelectCharsFallbackTestView.class) {
+      CAShapeLayer *shape = (CAShapeLayer *)fill.layer.sublayers.firstObject;
+      XCTAssertTrue(CGColorEqualToColor(shape.fillColor, UIColor.redColor.CGColor));
+    } else if (@available(iOS 17.0, *)) {
+      UIView *renderer = ((RNSelectCharsSelectionHighlightView *)fill).renderer;
+      XCTAssertEqualObjects([renderer.tintColor resolvedColorWithTraitCollection:renderer.traitCollection], UIColor.redColor);
+    }
     XCTAssertEqual(view.fontUpdates, fontUpdates);
     XCTAssertEqualObjects(view.textView.textStorage, storage);
     XCTAssertTrue(NSEqualRanges(view.textView.selectedRange, selected));
